@@ -1,12 +1,21 @@
 # -*- coding:utf-8 -*-
-import tkinter as tk 
-
+from tkinter import *
+from tkinter import messagebox
 import os
-
+import webbrowser
 import ntplib
-
 import datetime
+from urllib.request import urlopen
+from bs4 import BeautifulSoup
+from ttkbootstrap import Style
 
+# style = Style()
+# style = Style(theme='sandstone')
+# TOP6 = style.master
+
+
+version = 1 #版本
+updateweb = "baidu.com"
 def synctime():
     c = ntplib.NTPClient()
     hosts = ['edu.ntp.org.cn', 'tw.ntp.org.cn', 'us.ntp.org.cn', 'cn.pool.ntp.org', 'jp.ntp.org.cn']
@@ -34,33 +43,48 @@ def synctime():
 
     os.system('date %s && time %s' % (_date, _time))
 
-    print("同步后时间:", str(datetime.datetime.now())[:22])
+    str1 = "同步后时间:" + str(datetime.datetime.now())[:22]
+    messagebox.showinfo("成功同步",str1)
 
-version = 1
 
-root_window = tk.Tk()
-# 设置窗口title
+
+def CheckVersion():
+    
+    website = "https://effulgent-blini-0290da.netlify.app/"
+    soup = BeautifulSoup(urlopen(website), 'html.parser')
+    Lastestver = int(soup.p.string)
+    print(Lastestver)
+
+    if version == Lastestver:
+        messagebox.showinfo("检查更新","你已经是最新版")
+    elif version < Lastestver:
+        askback = messagebox.askquestion("检查更新","你的版本已经落后了，是否更新？")
+        if askback == False:
+            print(1) #不更新
+            return 0
+        else:
+            print(2) #确认更新
+            update()
+
+def update():
+    webbrowser.open(updateweb)
+
+
+root_window = Tk()
+
 root_window.title('时间自动同步工具')
-# 设置窗口大小:宽x高,注,此处不能为 "*",必须使用 "x"
 root_window.geometry('350x250')
-# 更改左上角窗口的的icon图标
-root_window.iconphoto(False, tk.PhotoImage(file='time.png'))
-# 设置主窗口的背景颜色,颜色值可以是英文单词，或者颜色值的16进制数,除此之外还可以使用Tk内置的颜色常量
 root_window["background"] = "#ffffff"
-# 添加文本内,设置字体的前景色和背景色，和字体类型、大小 
-text = tk.Label(root_window, text="时间自动同步", bg="white", fg="black" , font=("",20),width="30")
-
-# 将文本内容放置在主窗口内
-text.pack(pady="30")
-# 添加按钮，以及按钮的文本，并通过command 参数设置关闭窗口的功能
-button1 = tk.Button(root_window, text="时间同步", command=synctime)
-button2 = tk.Button(root_window, text="关闭", command=root_window.quit)
-button3 = tk.Button(root_window,text="更多")
-
-# 将按钮放置在主窗口内
-button2.pack(side="bottom")
-button1.pack(side="bottom")
-button3.pack(side="bottom")
-
-# 进入主循环，显示主窗口
+text = Label(root_window, text="时间自动同步", bg="white", fg="black" , font=("",20))
+text.pack(pady="50")
+button1 = Button(root_window, text="时间同步",width=30, command=synctime)
+button2 = Button(root_window, text="关闭",width=30, command=root_window.quit)
+button2.pack(side="bottom",pady=10)
+button1.pack(side="bottom",pady=5)
+#菜单栏
+top = Menu(root_window)
+menuMore = Menu(top)
+top.add_cascade(label="更多",menu=menuMore)
+menuMore.add_command(label="检查更新",command=CheckVersion)
+root_window.config(menu = top)
 root_window.mainloop()
