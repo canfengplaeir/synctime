@@ -1,129 +1,575 @@
-# -*- coding:utf-8 -*-
-from base64 import b64decode
-from tkinter import *
-from tkinter import messagebox
 import os
 import webbrowser
 import ntplib
 import datetime
-from urllib.request import urlopen
-from bs4 import BeautifulSoup
+import tkinter as tk
+from tkinter import messagebox, simpledialog
+import threading
+import requests
+from PIL import Image, ImageTk
 import ttkbootstrap as ttk
-from PIL import ImageTk
-from ttkbootstrap.constants import *
-# from ttkbootstrap import Style
+import ctypes
+import json
 
 
+class SyncTimeApp:
+    def __init__(self, root):
+        self.root = root
+        self.version = "1.0.0"  # 更新版本号格式为x.x.x
+        self.update_api = "https://synctimeapi.vercel.app/api/version"  # 替换为您的Vercel API地址
+        self.about_api = "https://synctimeapi.vercel.app/api/about"  # 新增关于页API地址
+        self.last_check_time = 0
+        self.check_interval = 3600  # 1小时
 
+        self.screenwidth = self.root.winfo_screenwidth()
+        self.screenheight = self.root.winfo_screenheight()
 
-version = 2 #版本
-updateweb = "https://gitee.com/canfeng_plaeir/synctime/releases"
+        self.ntp_servers_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ntp_servers.json")
+        self.load_ntp_servers()
+        self.primary_ntp_server = self.ntp_servers[0] if self.ntp_servers else None
 
+        self.setup_window()
+        self.create_widgets()
+        self.create_menu()
+        self.load_icon()  # 确保加载图标
 
-def close_window():
-    os._exit(0)
-def synctime():
-    c = ntplib.NTPClient()
-    hosts = ['edu.ntp.org.cn', 'tw.ntp.org.cn', 'us.ntp.org.cn', 'cn.pool.ntp.org', 'jp.ntp.org.cn']
-    for host in hosts:
+    def setup_window(self):
+        self.root.title("时间同步工具")
+        self.root.resizable(False, False)
+        # 将位置坐标转换为整数
+        x_pos = int((self.screenwidth - 500) / 2)
+        y_pos = int((self.screenheight - 310) / 2)
+        size_geo = f'{500}x{310}+{x_pos}+{y_pos}'
+        self.root.geometry(size_geo)
+        self.root.protocol("WM_DELETE_WINDOW", self.close_window)
+
+    def create_widgets(self):
+        # 创建一个主框架并居中
+        main_frame = tk.Frame(self.root, bg="white")
+        main_frame.pack(expand=True)
+
+        # 标签
+        self.text = tk.Label(main_frame, text="时间同步", bg="white", fg="black", font=("", 25))
+        self.text.pack(pady=20)
+
+        # 按钮
+        self.button_synctime = tk.Button(main_frame, text="时间同步", width=30, height=2, command=self.synctime)
+        self.button_close = tk.Button(main_frame, text="关闭", width=30, height=2, command=self.close_window)
+        self.button_synctime.pack(pady=10)
+        self.button_close.pack(pady=10)
+
+    def create_menu(self):
+        top_menu = tk.Menu(self.root, tearoff=False)
+        menu_more = tk.Menu(top_menu, tearoff=False)
+        top_menu.add_cascade(label="更多", menu=menu_more)
+        menu_more.add_command(label="检查更新", command=self.CheckVersion)
+        menu_more.add_command(label="关于", command=self.about_window)
+        top_menu.add_command(label="设置", command=self.open_settings)  # 添加设置按钮
+        self.root.config(menu=top_menu)
+
+    def load_icon(self):
         try:
-            response = c.request(host)
-            if response:
-                break
-        except Exception as e:
-            pass
-
-    current_time = response.tx_time
-
-    _date, _time = str(datetime.datetime.fromtimestamp(current_time))[:22].split(' ')
-
-    print("系统当前时间", str(datetime.datetime.now())[:22])
-
-    print("北京标准时间", _date, _time)
-
-    a, b, c = _time.split(':')
-
-    c = float(c) + 0.5
-
-    _time = "%s:%s:%s" % (a, b, c)
-    try:
-        os.system('date %s && time %s' % (_date, _time))
-    except:
-        messagebox.showwarning("Failure!","时间同步失败，请检查是否使用了管理员管理员权限。")
-
-    # os.system('date %s && time %s' % (_date, _time))
-
-    str1 = "同步后时间:" + str(datetime.datetime.now())[:22]
-    messagebox.showinfo("成功同步",str1)
-
-
-
-def CheckVersion():
-    
-    website = "https://effulgent-blini-0290da.netlify.app/"
-    def wangluo():
-        try:
-            soup = BeautifulSoup(urlopen(website), 'html.parser')
-            Lastestver = int(soup.p.string)
-            # print("最新版本为",Lastestver)
+            # 获取当前脚本的绝对路径
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            icon_path = os.path.join(script_dir, "app.ico")
             
-            return Lastestver
-        except:
-            messagebox.showerror("错误！","请检查是否联网！")
-            return 0
-    Lastestver = wangluo()
-    print(Lastestver)
-    if Lastestver != 0:
-        if version == Lastestver:
-            messagebox.showinfo("检查更新","你已经是最新版")
-        elif version < Lastestver:
-            askback = messagebox.askyesno("检查更新","你的版本已经落后了，是否更新？")
-            if askback == False:
-                print("No") #不更新
+            if os.path.exists(icon_path):
+                icon_image = Image.open(icon_path)
+                photo = ImageTk.PhotoImage(icon_image)
+                self.root.iconphoto(False, photo)
+                self.icon_image = photo  # 保持引用，防止被垃圾回收
+                print(f"图标加载成功: {icon_path}")
             else:
-                print("Yes") #确认更新
-                update()
+                print(f"图标文件不存在: {icon_path}")
+        except AttributeError as e:
+            print(f"AttributeError: {e}")
+        except Exception as e:
+            print(f"加载图标失败: {e}")
 
-def update():
-    webbrowser.open(updateweb)
+    def close_window(self):
+        self.root.destroy()
 
-#关于
-def about_window():
-    about = Tk()
-    about.title("关于")
-    size_about = '%dx%d+%d+%d' % (370, 230, (screenwidth-370)/2, (screenheight-230)/2)
-    about.geometry(size_about)
-    # about.geometry("350x200")
-    about.resizable(False,False)
-    text_baout = Text(about,wrap=CHAR,font=("",14))
-    text_baout.insert(INSERT,"感谢使用此软件！\nQQ：2147606879 \n博客地址：especial.top   \ngithub仓库：https://github.com/canfengplaeir/synctime \ngitee仓库：https://gitee.com/canfeng_plaeir/synctime ")
-    text_baout.pack()
-    about.mainloop()
+    def synctime(self):
+        if self.is_admin():
+            # 显示同步动画
+            self.show_sync_animation()
+            threading.Thread(target=self.sync_time_task).start()
+        else:
+            messagebox.showwarning("权限不足", "同步时间需要管理员权限。请以管理员身份运行程序。")
 
-root_window = ttk.window.Window(title="时间同步工具", themename="litera")
-root_window.resizable(False,False)
-screenwidth = root_window.winfo_screenwidth()
-screenheight = root_window.winfo_screenheight()
-size_geo = '%dx%d+%d+%d' % (500, 310, (screenwidth-500)/2, (screenheight-310)/2)
-root_window.geometry(size_geo)
+    def is_admin(self):
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        except:
+            return False
 
-root_window.protocol("WM_DELETE_WINDOW",close_window)
-text = Label(root_window, text="时间同步", bg="white", fg="black" , font=("",25))
-text.pack(pady="50")
-button1 = Button(root_window, text="时间同步",width=30,height=2, command=synctime)
-button2 = Button(root_window, text="关闭",width=30,height=2, command=root_window.quit)
-button2.pack(side="bottom",pady=15)
-button1.pack(side="bottom",pady=10)
-#菜单栏
-top = Menu(root_window,tearoff=False)
-menuMore = Menu(top,tearoff=False)
-top.add_cascade(label="更多",menu=menuMore)
-menuMore.add_command(label="检查更新",command=CheckVersion)
-menuMore.add_command(label="关于",command=about_window)
-root_window.config(menu = top)
+    def sync_time_task(self):
+        try:
+            if not self.primary_ntp_server:
+                self.root.after(0, lambda: messagebox.showerror("错误", "没有可用的NTP服务器。"))
+                return
 
-icon_img = b'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'
-icon_img = b64decode(icon_img)
-icon_img = ImageTk.PhotoImage(data=icon_img)
-root_window.tk.call('wm', 'iconphoto', root_window._w, icon_img)
-root_window.mainloop()
+            c = ntplib.NTPClient()
+            try:
+                response = c.request(self.primary_ntp_server, timeout=5)
+            except Exception:
+                self.root.after(0, lambda: messagebox.showerror("错误", f"无法连接到NTP服务器: {self.primary_ntp_server}"))
+                return
+
+            if response:
+                current_time = response.tx_time
+                dt = datetime.datetime.fromtimestamp(current_time)
+                _date = dt.strftime("%Y-%m-%d")
+                _time = dt.strftime("%H:%M:%S")
+                print("系统当前时间", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                print("北京标准时间", _date, _time)
+                a, b, c_sec = _time.split(':')
+                c_sec = float(c_sec) + 0.5
+                _time = f"{a}:{b}:{c_sec:.1f}"
+                try:
+                    os.system(f'date { _date } && time { _time }')
+                    str1 = f"同步后时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                    self.root.after(0, lambda: messagebox.showinfo("成功同步", str1))
+                except Exception as e:
+                    self.root.after(0, lambda: messagebox.showwarning("失败", f"时间同步失败: {e}"))
+            else:
+                self.root.after(0, lambda: messagebox.showerror("错误", "无法连接到任何NTP服务器。"))
+        except Exception as ex:
+            self.root.after(0, lambda: messagebox.showerror("错误", f"发生异常: {ex}"))
+        finally:
+            # 隐藏同步动画
+            self.hide_sync_animation()
+
+    def CheckVersion(self):
+        # 创建并显示加载动画窗口
+        loading_window = tk.Toplevel(self.root)
+        self.set_window_icon(loading_window)  # 设置图标
+        loading_window.title("检查更新")
+        loading_window.resizable(False, False)
+        x_pos = int((self.screenwidth - 400) / 2)
+        y_pos = int((self.screenheight - 250) / 2)
+        size_geo = f'400x250+{x_pos}+{y_pos}'
+        loading_window.geometry(size_geo)
+        
+        # 显示加载动画
+        loading_label = tk.Label(loading_window, text="正在检查更新，请稍候...", font=("", 12))
+        loading_label.pack(pady=10)
+
+        progress = ttk.Progressbar(loading_window, mode='indeterminate')
+        progress.pack(pady=10, padx=20, fill=tk.X)
+        progress.start(10)
+
+        # 启动线程进行版本检查
+        threading.Thread(target=self.check_version_task, args=(loading_window, progress, loading_label)).start()
+
+    def check_version_task(self, loading_window, progress, loading_label):
+        try:
+            response = requests.get(self.update_api)
+            
+            if response.status_code == 200:
+                data = response.json()
+                latest_version = data.get('version')
+                update_url = data.get('updateUrl')
+                announcement = data.get('announcement', '')
+
+                if self.version == latest_version:
+                    self.root.after(0, lambda: self.show_message(
+                        loading_window,
+                        progress,
+                        "你已经是最新版。",
+                        "info",
+                        announcement
+                    ))
+                elif self.compare_versions(self.version, latest_version) < 0:
+                    self.root.after(0, lambda: self.show_update_options(
+                        loading_window,
+                        progress,
+                        "你的版本已经落后了，是否更新？",
+                        update_url,
+                        announcement
+                    ))
+                else:
+                    self.root.after(0, lambda: self.show_message(
+                        loading_window,
+                        progress,
+                        "当前版本高于最新版本。",
+                        "warning",
+                        announcement
+                    ))
+            else:
+                raise Exception(f"API请求失败，状态码: {response.status_code}")
+        except requests.RequestException as e:
+            error_message = f"网络请求失败: {e}"
+            self.root.after(0, lambda: self.show_error_message(loading_window, progress, loading_label, error_message))
+        except Exception as ex:
+            error_message = f"发生异常: {ex}"
+            self.root.after(0, lambda: self.show_error_message(loading_window, progress, loading_label, error_message))
+
+    def show_error_message(self, loading_window, progress, loading_label, error_message):
+        # 停止并销毁进度条和加载标签
+        progress.stop()
+        progress.destroy()
+        loading_label.destroy()
+
+        # 显示错误信息
+        error_label = tk.Label(loading_window, text="检查更新失败", font=("", 14, "bold"), fg="red")
+        error_label.pack(pady=10)
+
+        error_details = tk.Text(loading_window, wrap=tk.WORD, height=5, width=40)
+        error_details.insert(tk.END, error_message)
+        error_details.config(state=tk.DISABLED)
+        error_details.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+
+        # 添加关闭按钮
+        tk.Button(loading_window, text="关闭", command=loading_window.destroy).pack(pady=10)
+
+    def show_message(self, loading_window, progress, message, msg_type, announcement):
+        # 这里假设 show_message 仅在检查更新时使用，因此 reset_ntp_servers 不需要调用它
+        # 停止并销毁进度条
+        if progress:
+            progress.stop()
+            progress.destroy()
+
+        # 更新加载窗口内容
+        for widget in loading_window.winfo_children():
+            widget.destroy()
+
+        msg_color = {"info": "green", "error": "red", "warning": "orange"}
+        tk.Label(loading_window, text=message, font=("", 12), fg=msg_color.get(msg_type, "black")).pack(pady=10)
+
+        if announcement:
+            announcement_frame = tk.Frame(loading_window)
+            announcement_frame.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+            
+            announcement_label = tk.Label(announcement_frame, text="更新公告:", font=("", 10, "bold"))
+            announcement_label.pack(anchor="w")
+            
+            announcement_text = tk.Text(announcement_frame, wrap=tk.WORD, height=5, width=40)
+            announcement_text.insert(tk.END, announcement)
+            announcement_text.config(state=tk.DISABLED)
+            announcement_text.pack(fill=tk.BOTH, expand=True)
+
+        tk.Button(loading_window, text="关闭", command=loading_window.destroy).pack(pady=10)
+
+    def show_update_options(self, loading_window, progress, message, update_url, announcement):
+        # 停止并销毁进度条
+        if progress:
+            progress.stop()
+            progress.destroy()
+
+        # 更新加载窗口内容
+        for widget in loading_window.winfo_children():
+            widget.destroy()
+
+        tk.Label(loading_window, text=message, font=("", 12)).pack(pady=10)
+
+        if announcement:
+            announcement_frame = tk.Frame(loading_window)
+            announcement_frame.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+            
+            announcement_label = tk.Label(announcement_frame, text="更新公告:", font=("", 10, "bold"))
+            announcement_label.pack(anchor="w")
+            
+            announcement_text = tk.Text(announcement_frame, wrap=tk.WORD, height=5, width=40)
+            announcement_text.insert(tk.END, announcement)
+            announcement_text.config(state=tk.DISABLED)
+            announcement_text.pack(fill=tk.BOTH, expand=True)
+
+        button_frame = tk.Frame(loading_window)
+        button_frame.pack(pady=10)
+
+        tk.Button(button_frame, text="更新", command=lambda: self.update(update_url)).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="取消", command=loading_window.destroy).pack(side=tk.LEFT, padx=5)
+
+    def update(self, update_url):
+        webbrowser.open(update_url)
+
+    def about_window(self):
+        if hasattr(self, 'about_window_instance') and self.about_window_instance and self.about_window_instance.winfo_exists():
+            self.about_window_instance.lift()
+            return
+
+        self.about_window_instance = tk.Toplevel(self.root)
+        self.set_window_icon(self.about_window_instance)
+        self.about_window_instance.title("关于")
+        # 将位置坐标转换为整数
+        x_pos = int((self.screenwidth - 370) / 2)
+        y_pos = int((self.screenheight - 230) / 2)
+        size_about = f'{370}x{230}+{x_pos}+{y_pos}'
+        self.about_window_instance.geometry(size_about)
+        self.about_window_instance.resizable(False, False)
+
+        # 显示加载动画
+        loading_label = tk.Label(self.about_window_instance, text="正在加载关于信息，请稍候...", font=("", 12))
+        loading_label.pack(pady=10)
+
+        progress = ttk.Progressbar(self.about_window_instance, mode='indeterminate')
+        progress.pack(pady=10, padx=20, fill=tk.X)
+        progress.start(10)
+
+        # 启动线程加载关于信息
+        threading.Thread(target=self.load_about_content, args=(loading_label, progress)).start()
+
+    def load_about_content(self, loading_label, progress):
+        default_about_content = (
+            "远程公告加载失败，这是默认内容\n"
+            "感谢使用此软件！\n"
+            "QQ：2147606879 \n"
+            "博客地址：especial.top\n"
+            "github仓库：https://github.com/canfengplaeir/synctime\n"
+            "gitee仓库：https://gitee.com/canfeng_plaeir/synctime"
+        )
+        try:
+            response = requests.get(self.about_api, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                about_content = data.get('aboutContent', default_about_content)
+            else:
+                about_content = default_about_content
+        except Exception as e:
+            print(f"加载关于信息失败: {e}")
+            about_content = default_about_content
+
+        # 更新关于窗口内容
+        self.root.after(0, lambda: self.display_about_content(loading_label, progress, about_content))
+
+    def display_about_content(self, loading_label, progress, about_content):
+        # 停止并销毁进度条和加载标签
+        progress.stop()
+        progress.destroy()
+        loading_label.destroy()
+
+        text_about = tk.Text(self.about_window_instance, wrap=tk.CHAR, font=("", 14))
+        text_about.insert(tk.INSERT, about_content)
+        text_about.config(state=tk.DISABLED)
+        text_about.pack(padx=10, pady=10)
+
+    def set_window_icon(self, window):
+        """
+        设置顶层窗口的图标为主窗口的图标
+        """
+        if hasattr(self, 'icon_image'):
+            window.iconphoto(False, self.icon_image)
+
+    def show_sync_animation(self):
+        # 创建同步动画窗口
+        self.sync_window = tk.Toplevel(self.root)
+        self.set_window_icon(self.sync_window)
+        self.sync_window.title("同步时间")
+        self.sync_window.resizable(False, False)
+        x_pos = int((self.screenwidth - 300) / 2)
+        y_pos = int((self.screenheight - 100) / 2)
+        size_geo = f'300x100+{x_pos}+{y_pos}'
+        self.sync_window.geometry(size_geo)
+        self.sync_window.protocol("WM_DELETE_WINDOW", lambda: None)  # 禁用关闭按钮
+
+        tk.Label(self.sync_window, text="正在同步时间，请稍候...", font=("", 12)).pack(pady=10)
+        progress = ttk.Progressbar(self.sync_window, mode='indeterminate')
+        progress.pack(pady=10, padx=20, fill=tk.X)
+        progress.start(10)
+        self.sync_progress = progress
+
+    def hide_sync_animation(self):
+        if hasattr(self, 'sync_window'):
+            self.sync_progress.stop()
+            self.sync_window.destroy()
+
+    def compare_versions(self, version1, version2):
+        """
+        比较两个版本号字符串
+        """
+        v1 = list(map(int, version1.split('.')))
+        v2 = list(map(int, version2.split('.')))
+        return (v1 > v2) - (v1 < v2)
+
+    def load_ntp_servers(self):
+        try:
+            with open(self.ntp_servers_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                self.ntp_servers = data.get('ntp_servers', [])
+        except FileNotFoundError:
+            print("ntp_servers.json文件未找到，使用默认NTP服务器列表。")
+            self.ntp_servers = [
+                'edu.ntp.org.cn', 
+                "ntp.ntsc.ac.cn",
+                "cn.ntp.org.cn",
+                "ntp1.aliyun.com",
+                "ntp2.aliyun.com",
+                "ntp3.aliyun.com",
+                "ntp4.aliyun.com",
+                "ntp5.aliyun.com",
+                "ntp6.aliyun.com",
+                "ntp7.aliyun.com",
+                "ntp.tencent.com",
+                'tw.ntp.org.cn', 
+                'us.ntp.org.cn', 
+                'cn.pool.ntp.org', 
+                'jp.ntp.org.cn'
+            ]
+            self.save_ntp_servers()
+
+    def save_ntp_servers(self):
+        try:
+            with open(self.ntp_servers_file, 'w', encoding='utf-8') as f:
+                json.dump({"ntp_servers": self.ntp_servers}, f, ensure_ascii=False, indent=4)
+            print("NTP服务器列表已保存。")
+        except Exception as e:
+            print(f"保存NTP服务器列表失败: {e}")
+
+    def reset_ntp_servers(self):
+        self.ntp_servers = [
+            'edu.ntp.org.cn', 
+            "ntp.ntsc.ac.cn",
+            "cn.ntp.org.cn",
+            "ntp1.aliyun.com",
+            "ntp2.aliyun.com",
+            "ntp3.aliyun.com",
+            "ntp4.aliyun.com",
+            "ntp5.aliyun.com",
+            "ntp6.aliyun.com",
+            "ntp7.aliyun.com",
+            "ntp.tencent.com",
+            'tw.ntp.org.cn', 
+            'us.ntp.org.cn', 
+            'cn.pool.ntp.org', 
+            'jp.ntp.org.cn'
+        ]
+        self.save_ntp_servers()
+        self.ntp_tree.delete(*self.ntp_tree.get_children())
+        for server in self.ntp_servers:
+            self.ntp_tree.insert("", tk.END, values=(server, "待测"))
+        messagebox.showinfo("重置成功", "已重置NTP服务器列表为默认值。", parent=self.settings_window_instance)
+
+    def open_settings(self):
+        if hasattr(self, 'settings_window_instance') and self.settings_window_instance and self.settings_window_instance.winfo_exists():
+            self.settings_window_instance.lift()
+            return
+
+        self.settings_window_instance = tk.Toplevel(self.root)
+        self.set_window_icon(self.settings_window_instance)
+        self.settings_window_instance.title("设置")
+        self.settings_window_instance.resizable(False, False)
+        size_geo = f'500x500+{int((self.screenwidth - 500) / 2)}+{int((self.screenheight - 500) / 2)}'
+        self.settings_window_instance.geometry(size_geo)
+
+        # NTP服务器列表框使用Treeview
+        ntp_frame = tk.Frame(self.settings_window_instance)
+        ntp_frame.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+
+        tk.Label(ntp_frame, text="NTP服务器列表:", font=("", 12, "bold")).pack(anchor="w")
+
+        columns = ("服务器地址", "延迟(ms)")
+        self.ntp_tree = ttk.Treeview(ntp_frame, columns=columns, show='headings')
+        for col in columns:
+            self.ntp_tree.heading(col, text=col)
+            self.ntp_tree.column(col, width=200, anchor='center')
+        self.ntp_tree.pack(fill=tk.BOTH, expand=True, pady=5)
+
+        for server in self.ntp_servers:
+            self.ntp_tree.insert("", tk.END, values=(server, "待测"))
+
+        # 按钮框
+        button_frame = tk.Frame(self.settings_window_instance)
+        button_frame.pack(pady=10)
+
+        add_button = tk.Button(button_frame, text="添加服务器", command=lambda: self.add_ntp_server(self.settings_window_instance))
+        delete_button = tk.Button(button_frame, text="删除选中", command=self.delete_selected_ntp_server)
+        reset_button = tk.Button(button_frame, text="重置为默认", command=self.reset_ntp_servers)
+
+        add_button.pack(side=tk.LEFT, padx=5)
+        delete_button.pack(side=tk.LEFT, padx=5)
+        reset_button.pack(side=tk.LEFT, padx=5)
+
+        # Ping按钮
+        ping_button = tk.Button(self.settings_window_instance, text="Ping所有服务器", command=self.ping_all_ntp_servers)
+        ping_button.pack(pady=5)
+
+    def add_ntp_server(self, parent_window):
+        def save_new_server():
+            new_server = entry.get().strip()
+            if new_server and new_server not in self.ntp_servers:
+                self.ntp_servers.append(new_server)
+                self.save_ntp_servers()
+                self.ntp_tree.insert("", tk.END, values=(new_server, "待测"))
+                add_window.destroy()
+            else:
+                messagebox.showwarning("无效输入", "请输入有效且未存在的NTP服务器地址。", parent=add_window)
+
+        add_window = tk.Toplevel(parent_window)
+        self.set_window_icon(add_window)
+        add_window.title("添加NTP服务器")
+        add_window.resizable(False, False)
+
+        # 获取屏幕尺寸
+        screen_width = add_window.winfo_screenwidth()
+        screen_height = add_window.winfo_screenheight()
+        window_width = 300
+        window_height = 150
+        x_pos = int((screen_width - window_width) / 2)
+        y_pos = int((screen_height - window_height) / 2)
+        add_window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
+
+        tk.Label(add_window, text="服务器地址:", font=("", 12)).pack(pady=10)
+        entry = tk.Entry(add_window, width=40)
+        entry.pack(pady=5)
+        tk.Button(add_window, text="添加", command=save_new_server).pack(pady=10)
+
+    def delete_selected_ntp_server(self):
+        selected = self.ntp_tree.selection()
+        if selected:
+            item = selected[0]
+            server = self.ntp_tree.item(item, 'values')[0]
+            confirm = messagebox.askyesno("确认删除", f"是否删除NTP服务器: {server}?", parent=self.settings_window_instance)
+            if confirm:
+                self.ntp_tree.delete(item)
+                index = self.ntp_servers.index(server)
+                self.ntp_servers.pop(index)
+                self.save_ntp_servers()
+                if server == self.primary_ntp_server:
+                    self.primary_ntp_server = self.ntp_servers[0] if self.ntp_servers else None
+        else:
+            messagebox.showwarning("未选择", "请先选择要删除的NTP服务器。", parent=self.settings_window_instance)
+
+    def ping_all_ntp_servers(self):
+        threading.Thread(target=self.ping_ntp_servers_task).start()
+
+    def ping_ntp_servers_task(self):
+        ping_results = {}
+        for server in self.ntp_servers:
+            try:
+                # 使用ping命令测量延迟
+                response = os.popen(f'ping -n 1 {server}').read()
+                # 解析延迟时间
+                latency = self.parse_ping_latency(response)
+                if latency is not None:
+                    ping_results[server] = latency
+                    # 更新Treeview中的延迟
+                    for item in self.ntp_tree.get_children():
+                        if self.ntp_tree.item(item, 'values')[0] == server:
+                            self.ntp_tree.item(item, values=(server, f"{latency} ms"))
+                            break
+            except Exception as e:
+                print(f"Ping {server} 失败: {e}")
+
+        if ping_results:
+            # 找到延迟最低的服务器
+            best_server = min(ping_results, key=ping_results.get)
+            self.primary_ntp_server = best_server
+            message = "Ping结果：\n" + "\n".join([f"{s}: {ms} ms" for s, ms in ping_results.items()]) + f"\n\n优选服务器设置为: {best_server}"
+            self.root.after(0, lambda: messagebox.showinfo("Ping结果", message, parent=self.settings_window_instance))
+        else:
+            self.root.after(0, lambda: messagebox.showerror("错误", "无法Ping任何NTP服务器。", parent=self.settings_window_instance))
+
+    def parse_ping_latency(self, ping_response):
+        import re
+        match = re.search(r'Time[=<]\s*(\d+)ms', ping_response)
+        if match:
+            return int(match.group(1))
+        return None
+
+    # 其他方法保持不变...
+
+if __name__ == "__main__":
+    root_window = ttk.Window(themename="litera")
+    app = SyncTimeApp(root_window)
+    root_window.mainloop()

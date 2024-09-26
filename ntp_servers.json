@@ -1,0 +1,16 @@
+{
+    "ntp_servers": [
+        "ntp.ntsc.ac.cn",
+        "cn.ntp.org.cn",
+        "ntp1.aliyun.com",
+        "ntp2.aliyun.com",
+        "ntp3.aliyun.com",
+        "ntp4.aliyun.com",
+        "ntp5.aliyun.com",
+        "ntp6.aliyun.com",
+        "ntp7.aliyun.com",
+        "tw.ntp.org.cn",
+        "us.ntp.org.cn",
+        "jp.ntp.org.cn"
+    ]
+}
