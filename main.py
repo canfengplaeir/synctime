@@ -10,6 +10,9 @@ from PIL import Image, ImageTk
 import ttkbootstrap as ttk
 import ctypes
 import json
+import subprocess  # 新增
+import platform    # 新增
+import logging
 
 
 class SyncTimeApp:
@@ -32,6 +35,12 @@ class SyncTimeApp:
         self.create_widgets()
         self.create_menu()
         self.load_icon()  # 确保加载图标
+
+        logging.basicConfig(
+            filename='synctime_debug.log',
+            level=logging.DEBUG,
+            format='%(asctime)s - %(levelname)s - %(message)s'
+        )
 
     def setup_window(self):
         self.root.title("时间同步工具")
@@ -534,40 +543,73 @@ class SyncTimeApp:
         threading.Thread(target=self.ping_ntp_servers_task).start()
 
     def ping_ntp_servers_task(self):
-        ping_results = {}
-        for server in self.ntp_servers:
-            try:
-                # 使用ping命令测量延迟
-                response = os.popen(f'ping -n 1 {server}').read()
-                # 解析延迟时间
-                latency = self.parse_ping_latency(response)
-                if latency is not None:
-                    ping_results[server] = latency
-                    # 更新Treeview中的延迟
-                    for item in self.ntp_tree.get_children():
-                        if self.ntp_tree.item(item, 'values')[0] == server:
-                            self.ntp_tree.item(item, values=(server, f"{latency} ms"))
-                            break
-            except Exception as e:
-                print(f"Ping {server} 失败: {e}")
+        try:
+            system_platform = platform.system().lower()
+            logging.debug(f"当前操作系统: {system_platform}")
+            if system_platform == "windows":
+                ping_cmd = ["ping", "-n", "1", "{server}"]
+            else:
+                ping_cmd = ["ping", "-c", "1", "{server}"]
 
-        if ping_results:
-            # 找到延迟最低的服务器
-            best_server = min(ping_results, key=ping_results.get)
-            self.primary_ntp_server = best_server
-            message = "Ping结果：\n" + "\n".join([f"{s}: {ms} ms" for s, ms in ping_results.items()]) + f"\n\n优选服务器设置为: {best_server}"
-            self.root.after(0, lambda: messagebox.showinfo("Ping结果", message, parent=self.settings_window_instance))
-        else:
-            self.root.after(0, lambda: messagebox.showerror("错误", "无法Ping任何NTP服务器。", parent=self.settings_window_instance))
+            ping_results = {}
+            for server in self.ntp_servers:
+                logging.debug(f"开始Ping服务器: {server}")
+                try:
+                    # 构建正确的ping命令
+                    cmd = ping_cmd[:]
+                    cmd[-1] = cmd[-1].format(server=server)
+                    
+                    logging.debug(f"执行命令: {' '.join(cmd)}")
+                    response = subprocess.run(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=3
+                    )
+                    logging.debug(f"Ping命令输出 for {server}:\n{response.stdout}")
+                    latency = self.parse_ping_latency(response.stdout, system_platform)
+                    logging.debug(f"解析后的延迟 for {server}: {latency} ms")
+                    if latency is not None:
+                        ping_results[server] = latency
+                        # 更新Treeview中的延迟
+                        for item in self.ntp_tree.get_children():
+                            if self.ntp_tree.item(item, 'values')[0] == server:
+                                self.ntp_tree.item(item, values=(server, f"{latency} ms"))
+                                logging.debug(f"Treeview 中已更新服务器 {server} 的延迟为 {latency} ms")
+                                break
+                except Exception as e:
+                    logging.error(f"Ping {server} 失败: {e}")
 
-    def parse_ping_latency(self, ping_response):
+            logging.debug(f"Ping结果: {ping_results}")
+            if ping_results:
+                # 找到延迟最低的服务器
+                best_server = min(ping_results, key=ping_results.get)
+                self.primary_ntp_server = best_server
+                message = "Ping结果：\n" + "\n".join([f"{s}: {ms} ms" for s, ms in ping_results.items()]) + f"\n\n优选服务器设置为: {best_server}"
+                logging.debug(f"最佳服务器: {best_server}")
+                self.root.after(0, lambda: messagebox.showinfo("Ping结果", message, parent=self.settings_window_instance))
+            else:
+                logging.warning("无法Ping任何NTP服务器。")
+                self.root.after(0, lambda: messagebox.showerror("错误", "无法Ping任何NTP服务器。", parent=self.settings_window_instance))
+        except Exception as ex:
+            error_message = f"发生异常: {ex}"
+            logging.error(error_message)
+            self.root.after(0, lambda: self.show_error_message(self.settings_window_instance, None, None, error_message))
+
+    def parse_ping_latency(self, ping_response, platform_system):
         import re
-        match = re.search(r'Time[=<]\s*(\d+)ms', ping_response)
+        logging.debug(f"解析Ping响应: {ping_response}")
+        if platform_system == "windows":
+            match = re.search(r"时间[=<]\s*(\d+)ms", ping_response)
+        else:
+            match = re.search(r"time[=<]\s*(\d+\.\d+) ms", ping_response)
         if match:
-            return int(match.group(1))
+            latency = float(match.group(1))
+            logging.debug(f"匹配到延迟: {latency} ms")
+            return latency
+        logging.warning("未能解析到延迟。")
         return None
-
-    # 其他方法保持不变...
 
 if __name__ == "__main__":
     root_window = ttk.Window(themename="litera")
