@@ -20,6 +20,7 @@ __pycache__/
 *.log
 *.xml
 *.exe
+*.aip
 
 # 忽略构建目录（如果有的话）
 /build/
@@ -35,5 +36,6 @@ __pycache__/
 main.dist/
 output/
 upx-4.2.4-win64/
-api/
-synctime_debug.log
+时间同步-cache/
+.gitignore
+/api/.vercel
