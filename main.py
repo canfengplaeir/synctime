@@ -3,7 +3,7 @@ import webbrowser
 import ntplib
 import datetime
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
 import threading
 import requests
 from PIL import Image, ImageTk
@@ -18,7 +18,7 @@ import logging
 class SyncTimeApp:
     def __init__(self, root):
         self.root = root
-        self.version = "1.0.0"  # 更新版本号格式为x.x.x
+        self.version = "1.1.0"  # 更新版本号格式为x.x.x
         self.update_api = "https://synctimeapi.vercel.app/api/version"  # 替换为您的Vercel API地址
         self.about_api = "https://synctimeapi.vercel.app/api/about"  # 新增关于页API地址
         self.last_check_time = 0
@@ -41,6 +41,8 @@ class SyncTimeApp:
             level=logging.DEBUG,
             format='%(asctime)s - %(levelname)s - %(message)s'
         )
+
+        self.ping_progress = None  # 添加这行来存储进度条引用
 
     def setup_window(self):
         self.root.title("时间同步工具")
@@ -187,7 +189,7 @@ class SyncTimeApp:
                         progress,
                         "你已经是最新版。",
                         "info",
-                        announcement
+                        announcement 
                     ))
                 elif self.compare_versions(self.version, latest_version) < 0:
                     self.root.after(0, lambda: self.show_update_options(
@@ -332,11 +334,15 @@ class SyncTimeApp:
             response = requests.get(self.about_api, timeout=5)
             if response.status_code == 200:
                 data = response.json()
-                about_content = data.get('aboutContent', default_about_content)
+                about_content = data.get('about_content', default_about_content)
+                if about_content == default_about_content:
+                    logging.warning("未能从API获取about_content，使用默认内容")
             else:
                 about_content = default_about_content
+                logging.error(f"API请求失败，状态码: {response.status_code}")
         except Exception as e:
             print(f"加载关于信息失败: {e}")
+            logging.error(f"加载关于信息失败: {e}")
             about_content = default_about_content
 
         # 更新关于窗口内容
@@ -467,12 +473,23 @@ class SyncTimeApp:
 
         tk.Label(ntp_frame, text="NTP服务器列表:", font=("", 12, "bold")).pack(anchor="w")
 
+        # 创建一个框架来容纳Treeview和滚动条
+        tree_frame = tk.Frame(ntp_frame)
+        tree_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+
+        # 创建垂直滚动条
+        vsb = ttk.Scrollbar(tree_frame, orient="vertical")
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+
         columns = ("服务器地址", "延迟(ms)")
-        self.ntp_tree = ttk.Treeview(ntp_frame, columns=columns, show='headings')
+        self.ntp_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', yscrollcommand=vsb.set)
         for col in columns:
             self.ntp_tree.heading(col, text=col)
             self.ntp_tree.column(col, width=200, anchor='center')
-        self.ntp_tree.pack(fill=tk.BOTH, expand=True, pady=5)
+        self.ntp_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # 配置滚动条
+        vsb.config(command=self.ntp_tree.yview)
 
         for server in self.ntp_servers:
             self.ntp_tree.insert("", tk.END, values=(server, "待测"))
@@ -489,9 +506,18 @@ class SyncTimeApp:
         delete_button.pack(side=tk.LEFT, padx=5)
         reset_button.pack(side=tk.LEFT, padx=5)
 
-        # Ping按钮
-        ping_button = tk.Button(self.settings_window_instance, text="Ping所有服务器", command=self.ping_all_ntp_servers)
-        ping_button.pack(pady=5)
+        # 创建一个框架来容纳Ping按钮和进度条
+        ping_frame = tk.Frame(self.settings_window_instance)
+        ping_frame.pack(pady=10, fill=tk.X)
+
+        # Ping按钮（居中）
+        self.ping_button = tk.Button(ping_frame, text="Ping所有服务器", command=self.ping_all_ntp_servers)
+        self.ping_button.pack(pady=(0, 5))  # 在按钮下方添加一些垂直间距
+
+        # 进度条（初始时隐藏，放在按钮下方）
+        self.ping_progress = ttk.Progressbar(ping_frame, mode='indeterminate', length=200)
+        self.ping_progress.pack(pady=(0, 5))  # 在进度条下方添加一些垂直间距
+        self.ping_progress.pack_forget()  # 初始时隐藏进度条
 
     def add_ntp_server(self, parent_window):
         def save_new_server():
@@ -540,6 +566,9 @@ class SyncTimeApp:
             messagebox.showwarning("未选择", "请先选择要删除的NTP服务器。", parent=self.settings_window_instance)
 
     def ping_all_ntp_servers(self):
+        self.ping_button.config(state=tk.DISABLED)  # 禁用按钮
+        self.ping_progress.pack(after=self.ping_button)  # 显示进度条在按钮下方
+        self.ping_progress.start(10)  # 开始进度条动画
         threading.Thread(target=self.ping_ntp_servers_task).start()
 
     def ping_ntp_servers_task(self):
@@ -569,24 +598,40 @@ class SyncTimeApp:
                     )
                     logging.debug(f"Ping命令输出 for {server}:\n{response.stdout}")
                     latency = self.parse_ping_latency(response.stdout, system_platform)
-                    logging.debug(f"解析后的延迟 for {server}: {latency} ms")
+                    logging.debug(f"解析后的延迟 for {server}: {latency}")
                     if latency is not None:
-                        ping_results[server] = latency
-                        # 更新Treeview中的延迟
-                        for item in self.ntp_tree.get_children():
-                            if self.ntp_tree.item(item, 'values')[0] == server:
-                                self.ntp_tree.item(item, values=(server, f"{latency} ms"))
-                                logging.debug(f"Treeview 中已更新服务器 {server} 的延迟为 {latency} ms")
-                                break
+                        if isinstance(latency, (int, float)):
+                            ping_results[server] = latency
+                            status = f"{latency} ms"
+                        else:
+                            status = latency  # 使用返回的错误信息
+                    else:
+                        status = "无法解析延迟"
+                    # 更新Treeview中的状态
+                    for item in self.ntp_tree.get_children():
+                        if self.ntp_tree.item(item, 'values')[0] == server:
+                            self.ntp_tree.item(item, values=(server, status))
+                            logging.debug(f"Treeview 中已更新服务器 {server} 的状态为 {status}")
+                            break
                 except Exception as e:
                     logging.error(f"Ping {server} 失败: {e}")
+                    status = "Ping失败"
+                    for item in self.ntp_tree.get_children():
+                        if self.ntp_tree.item(item, 'values')[0] == server:
+                            self.ntp_tree.item(item, values=(server, status))
+                            break
 
             logging.debug(f"Ping结果: {ping_results}")
             if ping_results:
+                # 按延迟从小到大排序
+                sorted_servers = sorted(ping_results.items(), key=lambda item: item[1])
+                self.ntp_servers = [server for server, _ in sorted_servers]
+                self.save_ntp_servers()  # 保存排序后的服务器列表
+
                 # 找到延迟最低的服务器
-                best_server = min(ping_results, key=ping_results.get)
+                best_server = self.ntp_servers[0]
                 self.primary_ntp_server = best_server
-                message = "Ping结果：\n" + "\n".join([f"{s}: {ms} ms" for s, ms in ping_results.items()]) + f"\n\n优选服务器设置为: {best_server}"
+                message = "Ping结果：\n" + "\n".join([f"{s}: {ms} ms" for s, ms in sorted_servers]) + f"\n\n优选服务器设置为: {best_server}"
                 logging.debug(f"最佳服务器: {best_server}")
                 self.root.after(0, lambda: messagebox.showinfo("Ping结果", message, parent=self.settings_window_instance))
             else:
@@ -596,6 +641,14 @@ class SyncTimeApp:
             error_message = f"发生异常: {ex}"
             logging.error(error_message)
             self.root.after(0, lambda: self.show_error_message(self.settings_window_instance, None, None, error_message))
+        finally:
+            # 在主线程中更新UI
+            self.root.after(0, self.finish_ping_task)
+
+    def finish_ping_task(self):
+        self.ping_progress.stop()  # 停止进度条动画
+        self.ping_progress.pack_forget()  # 隐藏进度条
+        self.ping_button.config(state=tk.NORMAL)  # 重新启用按钮
 
     def parse_ping_latency(self, ping_response, platform_system):
         import re
@@ -613,5 +666,13 @@ class SyncTimeApp:
 
 if __name__ == "__main__":
     root_window = ttk.Window(themename="litera")
+
+    # 告诉操作系统使用程序自身的dpi适配
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    # 获取屏幕的缩放因子
+    ScaleFactor = ctypes.windll.shcore.GetScaleFactorForDevice(0)
+    # 设置程序缩放
+    root_window.tk.call('tk', 'scaling', ScaleFactor/75)
+
     app = SyncTimeApp(root_window)
     root_window.mainloop()

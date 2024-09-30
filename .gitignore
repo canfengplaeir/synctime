@@ -1,0 +1,39 @@
+
+# 不忽略 .gitignore 文件
+!.gitignore
+
+# 不忽略 LICENSE 文件
+!LICENSE
+
+# 不忽略 Python 源代码文件
+!*.py
+
+
+# 不忽略 README 文件（如果有的话）
+!README.md
+
+# 忽略 Python 编译文件
+__pycache__/
+*.pyc
+
+# 忽略日志文件
+*.log
+*.xml
+*.exe
+
+# 忽略构建目录（如果有的话）
+/build/
+/dist/
+
+# 忽略虚拟环境（如果有的话）
+/.conda/
+
+# 忽略 IDE 相关文件（根据需要调整）
+.vscode/
+
+# 忽略 main.dist 目录
+main.dist/
+output/
+upx-4.2.4-win64/
+api/
+synctime_debug.log
