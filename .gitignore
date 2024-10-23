@@ -39,3 +39,4 @@ upx-4.2.4-win64/
 时间同步-cache/
 .gitignore
 /api/.vercel
+/api/functions/node_modules
