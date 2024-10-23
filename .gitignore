@@ -40,3 +40,7 @@ upx-4.2.4-win64/
 .gitignore
 /api/.vercel
 /api/functions/node_modules
+
+# Local Netlify folder
+.netlify
+/node_modules
