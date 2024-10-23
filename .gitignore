@@ -45,3 +45,4 @@ upx-4.2.4-win64/
 .netlify
 /node_modules
 main.zip
+/main
