@@ -1,0 +1,20 @@
+{
+  "name": "synctime_server",
+  "version": "1.0.0",
+  "main": "functions/api.js",
+  "scripts": {
+    "start": "netlify-lambda serve functions",
+    "build": "netlify-lambda build functions"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "serverless-http": "^2.7.0"
+  },
+  "devDependencies": {
+    "netlify-lambda": "^2.0.15"
+  }
+}

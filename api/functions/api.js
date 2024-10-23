@@ -1,16 +1,15 @@
-module.exports = (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+const express = require('express');
+const serverless = require('serverless-http');
+const cors = require('cors');
+const app = express();
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
+// 启用 CORS
+app.use(cors());
 
-  if (req.method === 'GET') {
-    const version = "1.1.0";
-    const announcement = `
+// 版本信息路由
+app.get('/version', (req, res) => {
+  const version = "1.1.0";
+  const announcement = `
 # SyncTime 更新日志
 
 版本 ${version}
@@ -65,15 +64,32 @@ module.exports = (req, res) => {
 
 - 程序版本号保持为 1.1.0
 - 建议用户更新到最新版本以获得更好的使用体验和稳定性
+  `.trim();
 
-    `.trim();
+  res.json({
+    version: version,
+    updateUrl: "https://gitee.com/canfeng_plaeir/synctime",
+    announcement: announcement
+  });
+});
 
-    res.status(200).json({
-      version: version,
-      updateUrl: "https://gitee.com/canfeng_plaeir/synctime",
-      announcement: announcement
-    });
-  } else {
-    res.status(405).json({ message: 'Method Not Allowed' });
-  }
-};
+// 服务器信息路由
+app.get('/about', (req, res) => {
+  res.json({
+    about_content: "感谢使用此软件！\nQQ：2147606879 \n博客地址：especial.top\ngithub仓库：https://github.com/canfengplaeir/synctime\ngitee仓库：https://gitee.com/canfeng_plaeir/synctime"
+  });
+});
+
+// 处理 404 错误
+app.use((req, res) => {
+  res.status(404).json({ message: 'Not Found' });
+});
+
+// 错误处理中间件
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Internal Server Error' });
+});
+
+// 导出处理程序
+module.exports.handler = serverless(app);

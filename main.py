@@ -11,7 +11,7 @@ import ttkbootstrap as ttk
 import ctypes
 import json
 import subprocess  # 新增
-import platform    # 新增
+import platform  # 新增
 import logging
 
 
@@ -19,7 +19,9 @@ class SyncTimeApp:
     def __init__(self, root):
         self.root = root
         self.version = "1.1.0"  # 更新版本号格式为x.x.x
-        self.update_api = "https://synctimeapi.vercel.app/api/version"  # 替换为您的Vercel API地址
+        self.update_api = (
+            "https://synctimeapi.vercel.app/api/version"  # 替换为您的Vercel API地址
+        )
         self.about_api = "https://synctimeapi.vercel.app/api/about"  # 新增关于页API地址
         self.last_check_time = 0
         self.check_interval = 3600  # 1小时
@@ -27,7 +29,9 @@ class SyncTimeApp:
         self.screenwidth = self.root.winfo_screenwidth()
         self.screenheight = self.root.winfo_screenheight()
 
-        self.ntp_servers_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ntp_servers.json")
+        self.ntp_servers_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "ntp_servers.json"
+        )
         self.load_ntp_servers()
         self.primary_ntp_server = self.ntp_servers[0] if self.ntp_servers else None
 
@@ -37,9 +41,9 @@ class SyncTimeApp:
         self.load_icon()  # 确保加载图标
 
         logging.basicConfig(
-            filename='synctime_debug.log',
+            filename="synctime_debug.log",
             level=logging.DEBUG,
-            format='%(asctime)s - %(levelname)s - %(message)s'
+            format="%(asctime)s - %(levelname)s - %(message)s",
         )
 
         self.ping_progress = None  # 添加这行来存储进度条引用
@@ -50,7 +54,7 @@ class SyncTimeApp:
         # 将位置坐标转换为整数
         x_pos = int((self.screenwidth - 500) / 2)
         y_pos = int((self.screenheight - 310) / 2)
-        size_geo = f'{500}x{310}+{x_pos}+{y_pos}'
+        size_geo = f"{500}x{310}+{x_pos}+{y_pos}"
         self.root.geometry(size_geo)
         self.root.protocol("WM_DELETE_WINDOW", self.close_window)
 
@@ -60,12 +64,18 @@ class SyncTimeApp:
         main_frame.pack(expand=True)
 
         # 标签
-        self.text = tk.Label(main_frame, text="时间同步", bg="white", fg="black", font=("", 25))
+        self.text = tk.Label(
+            main_frame, text="时间同步", bg="white", fg="black", font=("", 25)
+        )
         self.text.pack(pady=20)
 
         # 按钮
-        self.button_synctime = tk.Button(main_frame, text="时间同步", width=30, height=2, command=self.synctime)
-        self.button_close = tk.Button(main_frame, text="关闭", width=30, height=2, command=self.close_window)
+        self.button_synctime = tk.Button(
+            main_frame, text="时间同步", width=30, height=2, command=self.synctime
+        )
+        self.button_close = tk.Button(
+            main_frame, text="关闭", width=30, height=2, command=self.close_window
+        )
         self.button_synctime.pack(pady=10)
         self.button_close.pack(pady=10)
 
@@ -83,7 +93,7 @@ class SyncTimeApp:
             # 获取当前脚本的绝对路径
             script_dir = os.path.dirname(os.path.abspath(__file__))
             icon_path = os.path.join(script_dir, "app.ico")
-            
+
             if os.path.exists(icon_path):
                 icon_image = Image.open(icon_path)
                 photo = ImageTk.PhotoImage(icon_image)
@@ -102,11 +112,30 @@ class SyncTimeApp:
 
     def synctime(self):
         if self.is_admin():
+            # 检查系统时间
+            current_time = datetime.datetime.now()
+            target_year = 2024
+            if abs(current_time.year - target_year) > 20:
+                try:
+                    target_time = datetime.datetime(2024, 1, 1, 0, 0, 0)
+                    self.run_hidden_command(
+                        f'date {target_time.strftime("%Y-%m-%d")} && time {target_time.strftime("%H:%M:%S")}'
+                    )
+                except Exception as e:
+                    messagebox.showerror("错误", f"调整时间失败: {e}")
             # 显示同步动画
             self.show_sync_animation()
             threading.Thread(target=self.sync_time_task).start()
         else:
-            messagebox.showwarning("权限不足", "同步时间需要管理员权限。请以管理员身份运行程序。")
+            messagebox.showwarning(
+                "权限不足", "同步时间需要管理员权限。请以管理员身份运行程序。"
+            )
+
+    def run_hidden_command(self, command):
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        subprocess.run(command, startupinfo=startupinfo, shell=True, check=True)
 
     def is_admin(self):
         try:
@@ -117,14 +146,21 @@ class SyncTimeApp:
     def sync_time_task(self):
         try:
             if not self.primary_ntp_server:
-                self.root.after(0, lambda: messagebox.showerror("错误", "没有可用的NTP服务器。"))
+                self.root.after(
+                    0, lambda: messagebox.showerror("错误", "没有可用的NTP服务器。")
+                )
                 return
 
             c = ntplib.NTPClient()
             try:
                 response = c.request(self.primary_ntp_server, timeout=5)
             except Exception:
-                self.root.after(0, lambda: messagebox.showerror("错误", f"无法连接到NTP服务器: {self.primary_ntp_server}"))
+                self.root.after(
+                    0,
+                    lambda: messagebox.showerror(
+                        "错误", f"无法连接到NTP服务器: {self.primary_ntp_server}"
+                    ),
+                )
                 return
 
             if response:
@@ -132,19 +168,26 @@ class SyncTimeApp:
                 dt = datetime.datetime.fromtimestamp(current_time)
                 _date = dt.strftime("%Y-%m-%d")
                 _time = dt.strftime("%H:%M:%S")
-                print("系统当前时间", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                print(
+                    "系统当前时间",
+                    datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                )
                 print("北京标准时间", _date, _time)
-                a, b, c_sec = _time.split(':')
+                a, b, c_sec = _time.split(":")
                 c_sec = float(c_sec) + 0.5
                 _time = f"{a}:{b}:{c_sec:.1f}"
                 try:
-                    os.system(f'date { _date } && time { _time }')
+                    os.system(f"date { _date } && time { _time }")
                     str1 = f"同步后时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                     self.root.after(0, lambda: messagebox.showinfo("成功同步", str1))
                 except Exception as e:
-                    self.root.after(0, lambda: messagebox.showwarning("失败", f"时间同步失败: {e}"))
+                    self.root.after(
+                        0, lambda: messagebox.showwarning("失败", f"时间同步失败: {e}")
+                    )
             else:
-                self.root.after(0, lambda: messagebox.showerror("错误", "无法连接到任何NTP服务器。"))
+                self.root.after(
+                    0, lambda: messagebox.showerror("错误", "无法连接到任何NTP服务器。")
+                )
         except Exception as ex:
             self.root.after(0, lambda: messagebox.showerror("错误", f"发生异常: {ex}"))
         finally:
@@ -159,71 +202,99 @@ class SyncTimeApp:
         loading_window.resizable(False, False)
         x_pos = int((self.screenwidth - 400) / 2)
         y_pos = int((self.screenheight - 250) / 2)
-        size_geo = f'400x250+{x_pos}+{y_pos}'
+        size_geo = f"400x250+{x_pos}+{y_pos}"
         loading_window.geometry(size_geo)
-        
+
         # 显示加载动画
-        loading_label = tk.Label(loading_window, text="正在检查更新，请稍候...", font=("", 12))
+        loading_label = tk.Label(
+            loading_window, text="正在检查更新，请稍候...", font=("", 12)
+        )
         loading_label.pack(pady=10)
 
-        progress = ttk.Progressbar(loading_window, mode='indeterminate')
+        progress = ttk.Progressbar(loading_window, mode="indeterminate")
         progress.pack(pady=10, padx=20, fill=tk.X)
         progress.start(10)
 
         # 启动线程进行版本检查
-        threading.Thread(target=self.check_version_task, args=(loading_window, progress, loading_label)).start()
+        threading.Thread(
+            target=self.check_version_task,
+            args=(loading_window, progress, loading_label),
+        ).start()
 
     def check_version_task(self, loading_window, progress, loading_label):
         try:
             response = requests.get(self.update_api)
-            
+
             if response.status_code == 200:
                 data = response.json()
-                latest_version = data.get('version')
-                update_url = data.get('updateUrl')
-                announcement = data.get('announcement', '')
+                latest_version = data.get("version")
+                update_url = data.get("updateUrl")
+                announcement = data.get("announcement", "")
 
                 if self.version == latest_version:
-                    self.root.after(0, lambda: self.show_message(
-                        loading_window,
-                        progress,
-                        "你已经是最新版。",
-                        "info",
-                        announcement 
-                    ))
+                    self.root.after(
+                        0,
+                        lambda: self.show_message(
+                            loading_window,
+                            progress,
+                            "你已经是最新版。",
+                            "info",
+                            announcement,
+                        ),
+                    )
                 elif self.compare_versions(self.version, latest_version) < 0:
-                    self.root.after(0, lambda: self.show_update_options(
-                        loading_window,
-                        progress,
-                        "你的版本已经落后了，是否更新？",
-                        update_url,
-                        announcement
-                    ))
+                    self.root.after(
+                        0,
+                        lambda: self.show_update_options(
+                            loading_window,
+                            progress,
+                            "你的版本已经落后了，是否更新？",
+                            update_url,
+                            announcement,
+                        ),
+                    )
                 else:
-                    self.root.after(0, lambda: self.show_message(
-                        loading_window,
-                        progress,
-                        "当前版本高于最新版本。",
-                        "warning",
-                        announcement
-                    ))
+                    self.root.after(
+                        0,
+                        lambda: self.show_message(
+                            loading_window,
+                            progress,
+                            "当前版本高于最新版本。",
+                            "warning",
+                            announcement,
+                        ),
+                    )
             else:
                 raise Exception(f"API请求失败，状态码: {response.status_code}")
         except requests.RequestException as e:
             error_message = f"网络请求失败: {e}"
-            self.root.after(0, lambda: self.show_error_message(loading_window, progress, loading_label, error_message))
+            self.root.after(
+                0,
+                lambda: self.show_error_message(
+                    loading_window, progress, loading_label, error_message
+                ),
+            )
         except Exception as ex:
             error_message = f"发生异常: {ex}"
-            self.root.after(0, lambda: self.show_error_message(loading_window, progress, loading_label, error_message))
+            self.root.after(
+                0,
+                lambda: self.show_error_message(
+                    loading_window, progress, loading_label, error_message
+                ),
+            )
 
-    def show_error_message(self, loading_window, progress, loading_label, error_message):
+    def show_error_message(
+        self, loading_window, progress, loading_label, error_message
+    ):
         # 停止并销毁进度条和加载标签
         progress.stop()
         progress.destroy()
         loading_label.destroy()
 
         # 显示错误信息
-        error_label = tk.Label(loading_window, text="检查更新失败", font=("", 14, "bold"), fg="red")
+        error_label = tk.Label(
+            loading_window, text="检查更新失败", font=("", 14, "bold"), fg="red"
+        )
         error_label.pack(pady=10)
 
         error_details = tk.Text(loading_window, wrap=tk.WORD, height=5, width=40)
@@ -232,7 +303,9 @@ class SyncTimeApp:
         error_details.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
 
         # 添加关闭按钮
-        tk.Button(loading_window, text="关闭", command=loading_window.destroy).pack(pady=10)
+        tk.Button(loading_window, text="关闭", command=loading_window.destroy).pack(
+            pady=10
+        )
 
     def show_message(self, loading_window, progress, message, msg_type, announcement):
         # 这里假设 show_message 仅在检查更新时使用，因此 reset_ntp_servers 不需要调用它
@@ -246,23 +319,36 @@ class SyncTimeApp:
             widget.destroy()
 
         msg_color = {"info": "green", "error": "red", "warning": "orange"}
-        tk.Label(loading_window, text=message, font=("", 12), fg=msg_color.get(msg_type, "black")).pack(pady=10)
+        tk.Label(
+            loading_window,
+            text=message,
+            font=("", 12),
+            fg=msg_color.get(msg_type, "black"),
+        ).pack(pady=10)
 
         if announcement:
             announcement_frame = tk.Frame(loading_window)
             announcement_frame.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
-            
-            announcement_label = tk.Label(announcement_frame, text="更新公告:", font=("", 10, "bold"))
+
+            announcement_label = tk.Label(
+                announcement_frame, text="更新公告:", font=("", 10, "bold")
+            )
             announcement_label.pack(anchor="w")
-            
-            announcement_text = tk.Text(announcement_frame, wrap=tk.WORD, height=5, width=40)
+
+            announcement_text = tk.Text(
+                announcement_frame, wrap=tk.WORD, height=5, width=40
+            )
             announcement_text.insert(tk.END, announcement)
             announcement_text.config(state=tk.DISABLED)
             announcement_text.pack(fill=tk.BOTH, expand=True)
 
-        tk.Button(loading_window, text="关闭", command=loading_window.destroy).pack(pady=10)
+        tk.Button(loading_window, text="关闭", command=loading_window.destroy).pack(
+            pady=10
+        )
 
-    def show_update_options(self, loading_window, progress, message, update_url, announcement):
+    def show_update_options(
+        self, loading_window, progress, message, update_url, announcement
+    ):
         # 停止并销毁进度条
         if progress:
             progress.stop()
@@ -277,11 +363,15 @@ class SyncTimeApp:
         if announcement:
             announcement_frame = tk.Frame(loading_window)
             announcement_frame.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
-            
-            announcement_label = tk.Label(announcement_frame, text="更新公告:", font=("", 10, "bold"))
+
+            announcement_label = tk.Label(
+                announcement_frame, text="更新公告:", font=("", 10, "bold")
+            )
             announcement_label.pack(anchor="w")
-            
-            announcement_text = tk.Text(announcement_frame, wrap=tk.WORD, height=5, width=40)
+
+            announcement_text = tk.Text(
+                announcement_frame, wrap=tk.WORD, height=5, width=40
+            )
             announcement_text.insert(tk.END, announcement)
             announcement_text.config(state=tk.DISABLED)
             announcement_text.pack(fill=tk.BOTH, expand=True)
@@ -289,14 +379,22 @@ class SyncTimeApp:
         button_frame = tk.Frame(loading_window)
         button_frame.pack(pady=10)
 
-        tk.Button(button_frame, text="更新", command=lambda: self.update(update_url)).pack(side=tk.LEFT, padx=5)
-        tk.Button(button_frame, text="取消", command=loading_window.destroy).pack(side=tk.LEFT, padx=5)
+        tk.Button(
+            button_frame, text="更新", command=lambda: self.update(update_url)
+        ).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="取消", command=loading_window.destroy).pack(
+            side=tk.LEFT, padx=5
+        )
 
     def update(self, update_url):
         webbrowser.open(update_url)
 
     def about_window(self):
-        if hasattr(self, 'about_window_instance') and self.about_window_instance and self.about_window_instance.winfo_exists():
+        if (
+            hasattr(self, "about_window_instance")
+            and self.about_window_instance
+            and self.about_window_instance.winfo_exists()
+        ):
             self.about_window_instance.lift()
             return
 
@@ -306,20 +404,26 @@ class SyncTimeApp:
         # 将位置坐标转换为整数
         x_pos = int((self.screenwidth - 370) / 2)
         y_pos = int((self.screenheight - 230) / 2)
-        size_about = f'{370}x{230}+{x_pos}+{y_pos}'
+        size_about = f"{370}x{230}+{x_pos}+{y_pos}"
         self.about_window_instance.geometry(size_about)
         self.about_window_instance.resizable(False, False)
 
         # 显示加载动画
-        loading_label = tk.Label(self.about_window_instance, text="正在加载关于信息，请稍候...", font=("", 12))
+        loading_label = tk.Label(
+            self.about_window_instance,
+            text="正在加载关于信息，请稍候...",
+            font=("", 12),
+        )
         loading_label.pack(pady=10)
 
-        progress = ttk.Progressbar(self.about_window_instance, mode='indeterminate')
+        progress = ttk.Progressbar(self.about_window_instance, mode="indeterminate")
         progress.pack(pady=10, padx=20, fill=tk.X)
         progress.start(10)
 
         # 启动线程加载关于信息
-        threading.Thread(target=self.load_about_content, args=(loading_label, progress)).start()
+        threading.Thread(
+            target=self.load_about_content, args=(loading_label, progress)
+        ).start()
 
     def load_about_content(self, loading_label, progress):
         default_about_content = (
@@ -334,7 +438,7 @@ class SyncTimeApp:
             response = requests.get(self.about_api, timeout=5)
             if response.status_code == 200:
                 data = response.json()
-                about_content = data.get('about_content', default_about_content)
+                about_content = data.get("about_content", default_about_content)
                 if about_content == default_about_content:
                     logging.warning("未能从API获取about_content，使用默认内容")
             else:
@@ -346,7 +450,10 @@ class SyncTimeApp:
             about_content = default_about_content
 
         # 更新关于窗口内容
-        self.root.after(0, lambda: self.display_about_content(loading_label, progress, about_content))
+        self.root.after(
+            0,
+            lambda: self.display_about_content(loading_label, progress, about_content),
+        )
 
     def display_about_content(self, loading_label, progress, about_content):
         # 停止并销毁进度条和加载标签
@@ -363,7 +470,7 @@ class SyncTimeApp:
         """
         设置顶层窗口的图标为主窗口的图标
         """
-        if hasattr(self, 'icon_image'):
+        if hasattr(self, "icon_image"):
             window.iconphoto(False, self.icon_image)
 
     def show_sync_animation(self):
@@ -374,18 +481,20 @@ class SyncTimeApp:
         self.sync_window.resizable(False, False)
         x_pos = int((self.screenwidth - 300) / 2)
         y_pos = int((self.screenheight - 100) / 2)
-        size_geo = f'300x100+{x_pos}+{y_pos}'
+        size_geo = f"300x100+{x_pos}+{y_pos}"
         self.sync_window.geometry(size_geo)
         self.sync_window.protocol("WM_DELETE_WINDOW", lambda: None)  # 禁用关闭按钮
 
-        tk.Label(self.sync_window, text="正在同步时间，请稍候...", font=("", 12)).pack(pady=10)
-        progress = ttk.Progressbar(self.sync_window, mode='indeterminate')
+        tk.Label(self.sync_window, text="正在同步时间，请稍候...", font=("", 12)).pack(
+            pady=10
+        )
+        progress = ttk.Progressbar(self.sync_window, mode="indeterminate")
         progress.pack(pady=10, padx=20, fill=tk.X)
         progress.start(10)
         self.sync_progress = progress
 
     def hide_sync_animation(self):
-        if hasattr(self, 'sync_window'):
+        if hasattr(self, "sync_window"):
             self.sync_progress.stop()
             self.sync_window.destroy()
 
@@ -393,19 +502,19 @@ class SyncTimeApp:
         """
         比较两个版本号字符串
         """
-        v1 = list(map(int, version1.split('.')))
-        v2 = list(map(int, version2.split('.')))
+        v1 = list(map(int, version1.split(".")))
+        v2 = list(map(int, version2.split(".")))
         return (v1 > v2) - (v1 < v2)
 
     def load_ntp_servers(self):
         try:
-            with open(self.ntp_servers_file, 'r', encoding='utf-8') as f:
+            with open(self.ntp_servers_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self.ntp_servers = data.get('ntp_servers', [])
+                self.ntp_servers = data.get("ntp_servers", [])
         except FileNotFoundError:
             print("ntp_servers.json文件未找到，使用默认NTP服务器列表。")
             self.ntp_servers = [
-                'edu.ntp.org.cn', 
+                "edu.ntp.org.cn",
                 "ntp.ntsc.ac.cn",
                 "cn.ntp.org.cn",
                 "ntp1.aliyun.com",
@@ -416,24 +525,26 @@ class SyncTimeApp:
                 "ntp6.aliyun.com",
                 "ntp7.aliyun.com",
                 "ntp.tencent.com",
-                'tw.ntp.org.cn', 
-                'us.ntp.org.cn', 
-                'cn.pool.ntp.org', 
-                'jp.ntp.org.cn'
+                "tw.ntp.org.cn",
+                "us.ntp.org.cn",
+                "cn.pool.ntp.org",
+                "jp.ntp.org.cn",
             ]
             self.save_ntp_servers()
 
     def save_ntp_servers(self):
         try:
-            with open(self.ntp_servers_file, 'w', encoding='utf-8') as f:
-                json.dump({"ntp_servers": self.ntp_servers}, f, ensure_ascii=False, indent=4)
+            with open(self.ntp_servers_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    {"ntp_servers": self.ntp_servers}, f, ensure_ascii=False, indent=4
+                )
             print("NTP服务器列表已保存。")
         except Exception as e:
             print(f"保存NTP服务器列表失败: {e}")
 
     def reset_ntp_servers(self):
         self.ntp_servers = [
-            'edu.ntp.org.cn', 
+            "edu.ntp.org.cn",
             "ntp.ntsc.ac.cn",
             "cn.ntp.org.cn",
             "ntp1.aliyun.com",
@@ -444,19 +555,27 @@ class SyncTimeApp:
             "ntp6.aliyun.com",
             "ntp7.aliyun.com",
             "ntp.tencent.com",
-            'tw.ntp.org.cn', 
-            'us.ntp.org.cn', 
-            'cn.pool.ntp.org', 
-            'jp.ntp.org.cn'
+            "tw.ntp.org.cn",
+            "us.ntp.org.cn",
+            "cn.pool.ntp.org",
+            "jp.ntp.org.cn",
         ]
         self.save_ntp_servers()
         self.ntp_tree.delete(*self.ntp_tree.get_children())
         for server in self.ntp_servers:
             self.ntp_tree.insert("", tk.END, values=(server, "待测"))
-        messagebox.showinfo("重置成功", "已重置NTP服务器列表为默认值。", parent=self.settings_window_instance)
+        messagebox.showinfo(
+            "重置成功",
+            "已重置NTP服务器列表为默认值。",
+            parent=self.settings_window_instance,
+        )
 
     def open_settings(self):
-        if hasattr(self, 'settings_window_instance') and self.settings_window_instance and self.settings_window_instance.winfo_exists():
+        if (
+            hasattr(self, "settings_window_instance")
+            and self.settings_window_instance
+            and self.settings_window_instance.winfo_exists()
+        ):
             self.settings_window_instance.lift()
             return
 
@@ -464,14 +583,16 @@ class SyncTimeApp:
         self.set_window_icon(self.settings_window_instance)
         self.settings_window_instance.title("设置")
         self.settings_window_instance.resizable(False, False)
-        size_geo = f'500x500+{int((self.screenwidth - 500) / 2)}+{int((self.screenheight - 500) / 2)}'
+        size_geo = f"500x500+{int((self.screenwidth - 500) / 2)}+{int((self.screenheight - 500) / 2)}"
         self.settings_window_instance.geometry(size_geo)
 
         # NTP服务器列表框使用Treeview
         ntp_frame = tk.Frame(self.settings_window_instance)
         ntp_frame.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
 
-        tk.Label(ntp_frame, text="NTP服务器列表:", font=("", 12, "bold")).pack(anchor="w")
+        tk.Label(ntp_frame, text="NTP服务器列表:", font=("", 12, "bold")).pack(
+            anchor="w"
+        )
 
         # 创建一个框架来容纳Treeview和滚动条
         tree_frame = tk.Frame(ntp_frame)
@@ -482,10 +603,12 @@ class SyncTimeApp:
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
 
         columns = ("服务器地址", "延迟(ms)")
-        self.ntp_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', yscrollcommand=vsb.set)
+        self.ntp_tree = ttk.Treeview(
+            tree_frame, columns=columns, show="headings", yscrollcommand=vsb.set
+        )
         for col in columns:
             self.ntp_tree.heading(col, text=col)
-            self.ntp_tree.column(col, width=200, anchor='center')
+            self.ntp_tree.column(col, width=200, anchor="center")
         self.ntp_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # 配置滚动条
@@ -498,9 +621,17 @@ class SyncTimeApp:
         button_frame = tk.Frame(self.settings_window_instance)
         button_frame.pack(pady=10)
 
-        add_button = tk.Button(button_frame, text="添加服务器", command=lambda: self.add_ntp_server(self.settings_window_instance))
-        delete_button = tk.Button(button_frame, text="删除选中", command=self.delete_selected_ntp_server)
-        reset_button = tk.Button(button_frame, text="重置为默认", command=self.reset_ntp_servers)
+        add_button = tk.Button(
+            button_frame,
+            text="添加服务器",
+            command=lambda: self.add_ntp_server(self.settings_window_instance),
+        )
+        delete_button = tk.Button(
+            button_frame, text="删除选中", command=self.delete_selected_ntp_server
+        )
+        reset_button = tk.Button(
+            button_frame, text="重置为默认", command=self.reset_ntp_servers
+        )
 
         add_button.pack(side=tk.LEFT, padx=5)
         delete_button.pack(side=tk.LEFT, padx=5)
@@ -511,11 +642,15 @@ class SyncTimeApp:
         ping_frame.pack(pady=10, fill=tk.X)
 
         # Ping按钮（居中）
-        self.ping_button = tk.Button(ping_frame, text="Ping所有服务器", command=self.ping_all_ntp_servers)
+        self.ping_button = tk.Button(
+            ping_frame, text="Ping所有服务器", command=self.ping_all_ntp_servers
+        )
         self.ping_button.pack(pady=(0, 5))  # 在按钮下方添加一些垂直间距
 
         # 进度条（初始时隐藏，放在按钮下方）
-        self.ping_progress = ttk.Progressbar(ping_frame, mode='indeterminate', length=200)
+        self.ping_progress = ttk.Progressbar(
+            ping_frame, mode="indeterminate", length=200
+        )
         self.ping_progress.pack(pady=(0, 5))  # 在进度条下方添加一些垂直间距
         self.ping_progress.pack_forget()  # 初始时隐藏进度条
 
@@ -528,7 +663,9 @@ class SyncTimeApp:
                 self.ntp_tree.insert("", tk.END, values=(new_server, "待测"))
                 add_window.destroy()
             else:
-                messagebox.showwarning("无效输入", "请输入有效且未存在的NTP服务器地址。", parent=add_window)
+                messagebox.showwarning(
+                    "无效输入", "请输入有效且未存在的NTP服务器地址。", parent=add_window
+                )
 
         add_window = tk.Toplevel(parent_window)
         self.set_window_icon(add_window)
@@ -553,17 +690,27 @@ class SyncTimeApp:
         selected = self.ntp_tree.selection()
         if selected:
             item = selected[0]
-            server = self.ntp_tree.item(item, 'values')[0]
-            confirm = messagebox.askyesno("确认删除", f"是否删除NTP服务器: {server}?", parent=self.settings_window_instance)
+            server = self.ntp_tree.item(item, "values")[0]
+            confirm = messagebox.askyesno(
+                "确认删除",
+                f"是否删除NTP服务器: {server}?",
+                parent=self.settings_window_instance,
+            )
             if confirm:
                 self.ntp_tree.delete(item)
                 index = self.ntp_servers.index(server)
                 self.ntp_servers.pop(index)
                 self.save_ntp_servers()
                 if server == self.primary_ntp_server:
-                    self.primary_ntp_server = self.ntp_servers[0] if self.ntp_servers else None
+                    self.primary_ntp_server = (
+                        self.ntp_servers[0] if self.ntp_servers else None
+                    )
         else:
-            messagebox.showwarning("未选择", "请先选择要删除的NTP服务器。", parent=self.settings_window_instance)
+            messagebox.showwarning(
+                "未选择",
+                "请先选择要删除的NTP服务器。",
+                parent=self.settings_window_instance,
+            )
 
     def ping_all_ntp_servers(self):
         self.ping_button.config(state=tk.DISABLED)  # 禁用按钮
@@ -576,28 +723,21 @@ class SyncTimeApp:
             system_platform = platform.system().lower()
             logging.debug(f"当前操作系统: {system_platform}")
             if system_platform == "windows":
-                ping_cmd = ["ping", "-n", "1", "{server}"]
+                ping_cmd = "ping -n 1 {server}"
             else:
-                ping_cmd = ["ping", "-c", "1", "{server}"]
+                ping_cmd = "ping -c 1 {server}"
 
             ping_results = {}
             for server in self.ntp_servers:
                 logging.debug(f"开始Ping服务器: {server}")
                 try:
-                    # 构建正确的ping命令
-                    cmd = ping_cmd[:]
-                    cmd[-1] = cmd[-1].format(server=server)
-                    
-                    logging.debug(f"执行命令: {' '.join(cmd)}")
-                    response = subprocess.run(
-                        cmd,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        timeout=3
-                    )
-                    logging.debug(f"Ping命令输出 for {server}:\n{response.stdout}")
-                    latency = self.parse_ping_latency(response.stdout, system_platform)
+                    cmd = ping_cmd.format(server=server)
+                    logging.debug(f"执行命令: {cmd}")
+
+                    output = self.run_hidden_command(cmd, capture_output=True)
+
+                    logging.debug(f"Ping命令输出 for {server}:\n{output}")
+                    latency = self.parse_ping_latency(output, system_platform)
                     logging.debug(f"解析后的延迟 for {server}: {latency}")
                     if latency is not None:
                         if isinstance(latency, (int, float)):
@@ -609,15 +749,17 @@ class SyncTimeApp:
                         status = "无法解析延迟"
                     # 更新Treeview中的状态
                     for item in self.ntp_tree.get_children():
-                        if self.ntp_tree.item(item, 'values')[0] == server:
+                        if self.ntp_tree.item(item, "values")[0] == server:
                             self.ntp_tree.item(item, values=(server, status))
-                            logging.debug(f"Treeview 中已更新服务器 {server} 的状态为 {status}")
+                            logging.debug(
+                                f"Treeview 中已更新服务器 {server} 的状态为 {status}"
+                            )
                             break
                 except Exception as e:
                     logging.error(f"Ping {server} 失败: {e}")
                     status = "Ping失败"
                     for item in self.ntp_tree.get_children():
-                        if self.ntp_tree.item(item, 'values')[0] == server:
+                        if self.ntp_tree.item(item, "values")[0] == server:
                             self.ntp_tree.item(item, values=(server, status))
                             break
 
@@ -631,16 +773,37 @@ class SyncTimeApp:
                 # 找到延迟最低的服务器
                 best_server = self.ntp_servers[0]
                 self.primary_ntp_server = best_server
-                message = "Ping结果：\n" + "\n".join([f"{s}: {ms} ms" for s, ms in sorted_servers]) + f"\n\n优选服务器设置为: {best_server}"
+                message = (
+                    "Ping结果：\n"
+                    + "\n".join([f"{s}: {ms} ms" for s, ms in sorted_servers])
+                    + f"\n\n优选服务器设置为: {best_server}"
+                )
                 logging.debug(f"最佳服务器: {best_server}")
-                self.root.after(0, lambda: messagebox.showinfo("Ping结果", message, parent=self.settings_window_instance))
+                self.root.after(
+                    0,
+                    lambda: messagebox.showinfo(
+                        "Ping结果", message, parent=self.settings_window_instance
+                    ),
+                )
             else:
                 logging.warning("无法Ping任何NTP服务器。")
-                self.root.after(0, lambda: messagebox.showerror("错误", "无法Ping任何NTP服务器。", parent=self.settings_window_instance))
+                self.root.after(
+                    0,
+                    lambda: messagebox.showerror(
+                        "错误",
+                        "无法Ping任何NTP服务器。",
+                        parent=self.settings_window_instance,
+                    ),
+                )
         except Exception as ex:
             error_message = f"发生异常: {ex}"
             logging.error(error_message)
-            self.root.after(0, lambda: self.show_error_message(self.settings_window_instance, None, None, error_message))
+            self.root.after(
+                0,
+                lambda: self.show_error_message(
+                    self.settings_window_instance, None, None, error_message
+                ),
+            )
         finally:
             # 在主线程中更新UI
             self.root.after(0, self.finish_ping_task)
@@ -652,6 +815,7 @@ class SyncTimeApp:
 
     def parse_ping_latency(self, ping_response, platform_system):
         import re
+
         logging.debug(f"解析Ping响应: {ping_response}")
         if platform_system == "windows":
             match = re.search(r"时间[=<]\s*(\d+)ms", ping_response)
@@ -664,6 +828,25 @@ class SyncTimeApp:
         logging.warning("未能解析到延迟。")
         return None
 
+    def run_hidden_command(self, command, capture_output=False):
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+
+        if capture_output:
+            result = subprocess.run(
+                command,
+                startupinfo=startupinfo,
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return result.stdout
+        else:
+            subprocess.run(command, startupinfo=startupinfo, shell=True, check=True)
+
+
 if __name__ == "__main__":
     root_window = ttk.Window(themename="litera")
 
@@ -672,7 +855,8 @@ if __name__ == "__main__":
     # 获取屏幕的缩放因子
     ScaleFactor = ctypes.windll.shcore.GetScaleFactorForDevice(0)
     # 设置程序缩放
-    root_window.tk.call('tk', 'scaling', ScaleFactor/75)
 
     app = SyncTimeApp(root_window)
+    root_window.tk.call("tk", "scaling", ScaleFactor / 75)
+
     root_window.mainloop()
