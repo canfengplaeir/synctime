@@ -8,7 +8,7 @@ app.use(cors());
 
 // 版本信息路由
 app.get('/api/version', (req, res) => {
-  const version = "1.1.0";
+  const version = "1.2.0";
   const announcement = `
 # SyncTime 更新日志
 
@@ -74,7 +74,7 @@ app.get('/api/version', (req, res) => {
 });
 
 // 服务器信息路由
-app.get('/api/server', (req, res) => {
+app.get('/api/about', (req, res) => {
   res.json({
     about_content: "感谢使用此软件！\nQQ：2147606879 \n博客地址：especial.top\ngithub仓库：https://github.com/canfengplaeir/synctime\ngitee仓库：https://gitee.com/canfeng_plaeir/synctime"
   });

@@ -18,22 +18,26 @@ import logging
 class SyncTimeApp:
     def __init__(self, root):
         self.root = root
-        self.version = "1.1.0"  # 更新版本号格式为x.x.x
+        self.version = "1.2.0"  # 更新版本号格式为x.x.x
         self.update_api = (
-            "https://synctimeapi.vercel.app/api/version"  # 替换为您的Vercel API地址
+            "https://synctime-api.netlify.app/api/version"  # 替换为您的Vercel API地址
         )
-        self.about_api = "https://synctimeapi.vercel.app/api/about"  # 新增关于页API地址
+        self.about_api = (
+            "https://synctime-api.netlify.app/api/about"  # 新增关于页API地址
+        )
         self.last_check_time = 0
         self.check_interval = 3600  # 1小时
 
         self.screenwidth = self.root.winfo_screenwidth()
         self.screenheight = self.root.winfo_screenheight()
 
-        self.ntp_servers_file = os.path.join(
+        self.ntp_servers_filepath = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "ntp_servers.json"
         )
-        self.load_ntp_servers()
-        self.primary_ntp_server = self.ntp_servers[0] if self.ntp_servers else None
+        self.load_ntp_server_list()
+        self.primary_ntp_server = (
+            self.ntp_server_list[0] if self.ntp_server_list else None
+        )
 
         self.setup_window()
         self.create_widgets()
@@ -85,7 +89,9 @@ class SyncTimeApp:
         top_menu.add_cascade(label="更多", menu=menu_more)
         menu_more.add_command(label="检查更新", command=self.CheckVersion)
         menu_more.add_command(label="关于", command=self.about_window)
-        top_menu.add_command(label="设置", command=self.open_settings)  # 添加设置按钮
+        top_menu.add_command(
+            label="NTP服务器优选", command=self.open_ntp_preference
+        )  # 修改菜单标签和命令
         self.root.config(menu=top_menu)
 
     def load_icon(self):
@@ -118,7 +124,7 @@ class SyncTimeApp:
             if abs(current_time.year - target_year) > 20:
                 try:
                     target_time = datetime.datetime(2024, 1, 1, 0, 0, 0)
-                    self.run_hidden_command(
+                    self.execute_hidden_command(
                         f'date {target_time.strftime("%Y-%m-%d")} && time {target_time.strftime("%H:%M:%S")}'
                     )
                 except Exception as e:
@@ -131,11 +137,23 @@ class SyncTimeApp:
                 "权限不足", "同步时间需要管理员权限。请以管理员身份运行程序。"
             )
 
-    def run_hidden_command(self, command):
+    def execute_hidden_command(self, command, capture_output=False):
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
-        subprocess.run(command, startupinfo=startupinfo, shell=True, check=True)
+
+        if capture_output:
+            result = subprocess.run(
+                command,
+                startupinfo=startupinfo,
+                shell=True,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return result.stdout
+        else:
+            subprocess.run(command, startupinfo=startupinfo, shell=True, check=True)
 
     def is_admin(self):
         try:
@@ -308,7 +326,6 @@ class SyncTimeApp:
         )
 
     def show_message(self, loading_window, progress, message, msg_type, announcement):
-        # 这里假设 show_message 仅在检查更新时使用，因此 reset_ntp_servers 不需要调用它
         # 停止并销毁进度条
         if progress:
             progress.stop()
@@ -506,14 +523,14 @@ class SyncTimeApp:
         v2 = list(map(int, version2.split(".")))
         return (v1 > v2) - (v1 < v2)
 
-    def load_ntp_servers(self):
+    def load_ntp_server_list(self):
         try:
-            with open(self.ntp_servers_file, "r", encoding="utf-8") as f:
+            with open(self.ntp_servers_filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self.ntp_servers = data.get("ntp_servers", [])
+                self.ntp_server_list = data.get("ntp_servers", [])
         except FileNotFoundError:
             print("ntp_servers.json文件未找到，使用默认NTP服务器列表。")
-            self.ntp_servers = [
+            self.ntp_server_list = [
                 "edu.ntp.org.cn",
                 "ntp.ntsc.ac.cn",
                 "cn.ntp.org.cn",
@@ -530,20 +547,23 @@ class SyncTimeApp:
                 "cn.pool.ntp.org",
                 "jp.ntp.org.cn",
             ]
-            self.save_ntp_servers()
+            self.save_ntp_server_list()
 
-    def save_ntp_servers(self):
+    def save_ntp_server_list(self):
         try:
-            with open(self.ntp_servers_file, "w", encoding="utf-8") as f:
+            with open(self.ntp_servers_filepath, "w", encoding="utf-8") as f:
                 json.dump(
-                    {"ntp_servers": self.ntp_servers}, f, ensure_ascii=False, indent=4
+                    {"ntp_servers": self.ntp_server_list},
+                    f,
+                    ensure_ascii=False,
+                    indent=4,
                 )
             print("NTP服务器列表已保存。")
         except Exception as e:
             print(f"保存NTP服务器列表失败: {e}")
 
-    def reset_ntp_servers(self):
-        self.ntp_servers = [
+    def reset_ntp_server_list(self):
+        self.ntp_server_list = [
             "edu.ntp.org.cn",
             "ntp.ntsc.ac.cn",
             "cn.ntp.org.cn",
@@ -560,17 +580,17 @@ class SyncTimeApp:
             "cn.pool.ntp.org",
             "jp.ntp.org.cn",
         ]
-        self.save_ntp_servers()
-        self.ntp_tree.delete(*self.ntp_tree.get_children())
-        for server in self.ntp_servers:
-            self.ntp_tree.insert("", tk.END, values=(server, "待测"))
+        self.save_ntp_server_list()
+        self.ntp_server_tree.delete(*self.ntp_server_tree.get_children())
+        for server in self.ntp_server_list:
+            self.ntp_server_tree.insert("", tk.END, values=(server, "待测"))
         messagebox.showinfo(
             "重置成功",
             "已重置NTP服务器列表为默认值。",
             parent=self.settings_window_instance,
         )
 
-    def open_settings(self):
+    def open_ntp_preference(self):
         if (
             hasattr(self, "settings_window_instance")
             and self.settings_window_instance
@@ -581,7 +601,7 @@ class SyncTimeApp:
 
         self.settings_window_instance = tk.Toplevel(self.root)
         self.set_window_icon(self.settings_window_instance)
-        self.settings_window_instance.title("设置")
+        self.settings_window_instance.title("NTP服务器优选")
         self.settings_window_instance.resizable(False, False)
         size_geo = f"500x500+{int((self.screenwidth - 500) / 2)}+{int((self.screenheight - 500) / 2)}"
         self.settings_window_instance.geometry(size_geo)
@@ -603,19 +623,19 @@ class SyncTimeApp:
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
 
         columns = ("服务器地址", "延迟(ms)")
-        self.ntp_tree = ttk.Treeview(
+        self.ntp_server_tree = ttk.Treeview(
             tree_frame, columns=columns, show="headings", yscrollcommand=vsb.set
         )
         for col in columns:
-            self.ntp_tree.heading(col, text=col)
-            self.ntp_tree.column(col, width=200, anchor="center")
-        self.ntp_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            self.ntp_server_tree.heading(col, text=col)
+            self.ntp_server_tree.column(col, width=200, anchor="center")
+        self.ntp_server_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # 配置滚动条
-        vsb.config(command=self.ntp_tree.yview)
+        vsb.config(command=self.ntp_server_tree.yview)
 
-        for server in self.ntp_servers:
-            self.ntp_tree.insert("", tk.END, values=(server, "待测"))
+        for server in self.ntp_server_list:
+            self.ntp_server_tree.insert("", tk.END, values=(server, "待测"))
 
         # 按钮框
         button_frame = tk.Frame(self.settings_window_instance)
@@ -624,13 +644,13 @@ class SyncTimeApp:
         add_button = tk.Button(
             button_frame,
             text="添加服务器",
-            command=lambda: self.add_ntp_server(self.settings_window_instance),
+            command=lambda: self.add_ntp_server_entry(self.settings_window_instance),
         )
         delete_button = tk.Button(
-            button_frame, text="删除选中", command=self.delete_selected_ntp_server
+            button_frame, text="删除选中", command=self.remove_selected_ntp_server
         )
         reset_button = tk.Button(
-            button_frame, text="重置为默认", command=self.reset_ntp_servers
+            button_frame, text="重置为默认", command=self.reset_ntp_server_list
         )
 
         add_button.pack(side=tk.LEFT, padx=5)
@@ -643,7 +663,7 @@ class SyncTimeApp:
 
         # Ping按钮（居中）
         self.ping_button = tk.Button(
-            ping_frame, text="Ping所有服务器", command=self.ping_all_ntp_servers
+            ping_frame, text="Ping所有服务器", command=self.ping_all_ntp_servers_latency
         )
         self.ping_button.pack(pady=(0, 5))  # 在按钮下方添加一些垂直间距
 
@@ -654,13 +674,13 @@ class SyncTimeApp:
         self.ping_progress.pack(pady=(0, 5))  # 在进度条下方添加一些垂直间距
         self.ping_progress.pack_forget()  # 初始时隐藏进度条
 
-    def add_ntp_server(self, parent_window):
+    def add_ntp_server_entry(self, parent_window):
         def save_new_server():
             new_server = entry.get().strip()
-            if new_server and new_server not in self.ntp_servers:
-                self.ntp_servers.append(new_server)
-                self.save_ntp_servers()
-                self.ntp_tree.insert("", tk.END, values=(new_server, "待测"))
+            if new_server and new_server not in self.ntp_server_list:
+                self.ntp_server_list.append(new_server)
+                self.save_ntp_server_list()
+                self.ntp_server_tree.insert("", tk.END, values=(new_server, "待测"))
                 add_window.destroy()
             else:
                 messagebox.showwarning(
@@ -686,24 +706,24 @@ class SyncTimeApp:
         entry.pack(pady=5)
         tk.Button(add_window, text="添加", command=save_new_server).pack(pady=10)
 
-    def delete_selected_ntp_server(self):
-        selected = self.ntp_tree.selection()
+    def remove_selected_ntp_server(self):
+        selected = self.ntp_server_tree.selection()
         if selected:
             item = selected[0]
-            server = self.ntp_tree.item(item, "values")[0]
+            server = self.ntp_server_tree.item(item, "values")[0]
             confirm = messagebox.askyesno(
                 "确认删除",
                 f"是否删除NTP服务器: {server}?",
                 parent=self.settings_window_instance,
             )
             if confirm:
-                self.ntp_tree.delete(item)
-                index = self.ntp_servers.index(server)
-                self.ntp_servers.pop(index)
-                self.save_ntp_servers()
+                self.ntp_server_tree.delete(item)
+                index = self.ntp_server_list.index(server)
+                self.ntp_server_list.pop(index)
+                self.save_ntp_server_list()
                 if server == self.primary_ntp_server:
                     self.primary_ntp_server = (
-                        self.ntp_servers[0] if self.ntp_servers else None
+                        self.ntp_server_list[0] if self.ntp_server_list else None
                     )
         else:
             messagebox.showwarning(
@@ -712,13 +732,13 @@ class SyncTimeApp:
                 parent=self.settings_window_instance,
             )
 
-    def ping_all_ntp_servers(self):
+    def ping_all_ntp_servers_latency(self):
         self.ping_button.config(state=tk.DISABLED)  # 禁用按钮
         self.ping_progress.pack(after=self.ping_button)  # 显示进度条在按钮下方
         self.ping_progress.start(10)  # 开始进度条动画
-        threading.Thread(target=self.ping_ntp_servers_task).start()
+        threading.Thread(target=self.perform_ping_ntp_servers).start()
 
-    def ping_ntp_servers_task(self):
+    def perform_ping_ntp_servers(self):
         try:
             system_platform = platform.system().lower()
             logging.debug(f"当前操作系统: {system_platform}")
@@ -728,16 +748,16 @@ class SyncTimeApp:
                 ping_cmd = "ping -c 1 {server}"
 
             ping_results = {}
-            for server in self.ntp_servers:
+            for server in self.ntp_server_list:
                 logging.debug(f"开始Ping服务器: {server}")
                 try:
                     cmd = ping_cmd.format(server=server)
                     logging.debug(f"执行命令: {cmd}")
 
-                    output = self.run_hidden_command(cmd, capture_output=True)
+                    output = self.execute_hidden_command(cmd, capture_output=True)
 
                     logging.debug(f"Ping命令输出 for {server}:\n{output}")
-                    latency = self.parse_ping_latency(output, system_platform)
+                    latency = self.extract_ping_latency(output, system_platform)
                     logging.debug(f"解析后的延迟 for {server}: {latency}")
                     if latency is not None:
                         if isinstance(latency, (int, float)):
@@ -748,9 +768,9 @@ class SyncTimeApp:
                     else:
                         status = "无法解析延迟"
                     # 更新Treeview中的状态
-                    for item in self.ntp_tree.get_children():
-                        if self.ntp_tree.item(item, "values")[0] == server:
-                            self.ntp_tree.item(item, values=(server, status))
+                    for item in self.ntp_server_tree.get_children():
+                        if self.ntp_server_tree.item(item, "values")[0] == server:
+                            self.ntp_server_tree.item(item, values=(server, status))
                             logging.debug(
                                 f"Treeview 中已更新服务器 {server} 的状态为 {status}"
                             )
@@ -758,20 +778,20 @@ class SyncTimeApp:
                 except Exception as e:
                     logging.error(f"Ping {server} 失败: {e}")
                     status = "Ping失败"
-                    for item in self.ntp_tree.get_children():
-                        if self.ntp_tree.item(item, "values")[0] == server:
-                            self.ntp_tree.item(item, values=(server, status))
+                    for item in self.ntp_server_tree.get_children():
+                        if self.ntp_server_tree.item(item, "values")[0] == server:
+                            self.ntp_server_tree.item(item, values=(server, status))
                             break
 
             logging.debug(f"Ping结果: {ping_results}")
             if ping_results:
                 # 按延迟从小到大排序
                 sorted_servers = sorted(ping_results.items(), key=lambda item: item[1])
-                self.ntp_servers = [server for server, _ in sorted_servers]
-                self.save_ntp_servers()  # 保存排序后的服务器列表
+                self.ntp_server_list = [server for server, _ in sorted_servers]
+                self.save_ntp_server_list()  # 保存排序后的服务器列表
 
                 # 找到延迟最低的服务器
-                best_server = self.ntp_servers[0]
+                best_server = self.ntp_server_list[0]
                 self.primary_ntp_server = best_server
                 message = (
                     "Ping结果：\n"
@@ -813,7 +833,7 @@ class SyncTimeApp:
         self.ping_progress.pack_forget()  # 隐藏进度条
         self.ping_button.config(state=tk.NORMAL)  # 重新启用按钮
 
-    def parse_ping_latency(self, ping_response, platform_system):
+    def extract_ping_latency(self, ping_response, platform_system):
         import re
 
         logging.debug(f"解析Ping响应: {ping_response}")
@@ -828,24 +848,6 @@ class SyncTimeApp:
         logging.warning("未能解析到延迟。")
         return None
 
-    def run_hidden_command(self, command, capture_output=False):
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        startupinfo.wShowWindow = subprocess.SW_HIDE
-
-        if capture_output:
-            result = subprocess.run(
-                command,
-                startupinfo=startupinfo,
-                shell=True,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            return result.stdout
-        else:
-            subprocess.run(command, startupinfo=startupinfo, shell=True, check=True)
-
 
 if __name__ == "__main__":
     root_window = ttk.Window(themename="litera")
@@ -855,8 +857,19 @@ if __name__ == "__main__":
     # 获取屏幕的缩放因子
     ScaleFactor = ctypes.windll.shcore.GetScaleFactorForDevice(0)
     # 设置程序缩放
-
-    app = SyncTimeApp(root_window)
     root_window.tk.call("tk", "scaling", ScaleFactor / 75)
+
+    # 创建应用实例
+    app = SyncTimeApp(root_window)
+
+    # 检查DPI适配是否正常
+    current_dpi = root_window.winfo_fpixels("1i")
+    expected_dpi = 96 * (ScaleFactor / 100)
+    if abs(current_dpi - expected_dpi) > 1:
+        print(
+            f"警告: DPI适配可能不正常。当前DPI: {current_dpi:.2f}, 预期DPI: {expected_dpi:.2f}"
+        )
+    else:
+        print(f"DPI适配正常。当前DPI: {current_dpi:.2f}")
 
     root_window.mainloop()
