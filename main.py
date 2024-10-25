@@ -13,6 +13,7 @@ import json
 import subprocess  # 新增
 import platform  # 新增
 import logging
+import tkinter.simpledialog as simpledialog
 
 
 class SyncTimeApp:
@@ -197,7 +198,7 @@ class SyncTimeApp:
                 try:
                     os.system(f"date { _date } && time { _time }")
                     str1 = f"同步后时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                    self.root.after(0, lambda: messagebox.showinfo("成功同步", str1))
+                    self.root.after(0, lambda: self.show_sync_success_message(str1))
                 except Exception as e:
                     self.root.after(
                         0, lambda: messagebox.showwarning("失败", f"时间同步失败: {e}")
@@ -211,6 +212,16 @@ class SyncTimeApp:
         finally:
             # 隐藏同步动画
             self.hide_sync_animation()
+
+    def show_sync_success_message(self, message):
+        dialog = CustomDialog(self.root, "成功同步", message)
+        if dialog.result:
+            self.root.after(100, self.close_application)  # 使用新方法来关闭应用
+
+    def close_application(self):
+        self.root.quit()
+        self.root.destroy()  # 确保窗口被销毁
+        os._exit(0)  # 强制退出程序
 
     def CheckVersion(self):
         # 创建并显示加载动画窗口
@@ -849,6 +860,41 @@ class SyncTimeApp:
         return None
 
 
+class CustomDialog(tk.Toplevel):
+    def __init__(self, parent, title, message):
+        super().__init__(parent)
+        self.title(title)
+        self.result = None
+        self.create_widgets(message)
+        self.transient(parent)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
+        self.geometry("+%d+%d" % (parent.winfo_rootx() + 50, parent.winfo_rooty() + 50))
+        self.wait_window(self)
+
+    def create_widgets(self, message):
+        tk.Label(self, text=message, wraplength=300).pack(pady=10)
+        tk.Label(self, text="是否退出程序？").pack(pady=10)
+
+        button_frame = tk.Frame(self)
+        button_frame.pack(pady=10)
+
+        tk.Button(button_frame, text="退出程序", width=10, command=self.ok).pack(
+            side=tk.LEFT, padx=5
+        )
+        tk.Button(button_frame, text="取消", width=10, command=self.cancel).pack(
+            side=tk.LEFT, padx=5
+        )
+
+    def ok(self):
+        self.result = True
+        self.destroy()
+
+    def cancel(self):
+        self.result = False
+        self.destroy()
+
+
 if __name__ == "__main__":
     root_window = ttk.Window(themename="litera")
 
@@ -870,6 +916,6 @@ if __name__ == "__main__":
             f"警告: DPI适配可能不正常。当前DPI: {current_dpi:.2f}, 预期DPI: {expected_dpi:.2f}"
         )
     else:
-        print(f"DPI适配正常。当前DPI: {current_dpi:.2f}")
+        print(f"DPI适��正常。当前DPI: {current_dpi:.2f}")
 
     root_window.mainloop()
