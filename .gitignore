@@ -46,3 +46,5 @@ upx-4.2.4-win64/
 /node_modules
 main.zip
 /main
+ntp_servers_exported.txt
+ntp_servers.json
